@@ -296,11 +296,10 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
             height: 100%;
+            overflow-y: auto;
             padding: 20px;
             position: relative;
-            overflow: hidden;
             background:
                 radial-gradient(circle at 15% 20%, var(--accent-wash) 0%, transparent 45%),
                 radial-gradient(circle at 85% 80%, var(--primary-wash-strong) 0%, transparent 45%),
@@ -318,6 +317,7 @@
             box-shadow: var(--shadow-md);
             position: relative;
             z-index: 1;
+            margin: auto 0;
         }
 
         .auth-title { font-size: 23px; font-weight: 800; margin-bottom: 6px; color: var(--primary); letter-spacing: 0.1px; }
