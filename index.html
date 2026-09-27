@@ -428,6 +428,11 @@
                 <label class="form-label">Surface totale (ha, optionnel)</label>
                 <input type="number" id="setup-surface" class="form-input" step="0.1" placeholder="Ex: 19.5">
             </div>
+            <!-- Piège anti-spam (honeypot) : invisible pour un humain, souvent rempli par les robots -->
+            <div style="position: absolute; left: -9999px; top: -9999px;" aria-hidden="true">
+                <label for="setup-website">Laisser vide</label>
+                <input type="text" id="setup-website" name="website" tabindex="-1" autocomplete="off">
+            </div>
             <button class="btn-submit" id="btn-setup" onclick="creerExploitation()">✓ Créer mon exploitation</button>
         </div>
     </div>
@@ -734,6 +739,14 @@
         }
 
         async function creerExploitation() {
+            // Anti-spam : si ce champ invisible est rempli, c'est un robot — on ne fait rien,
+            // silencieusement, comme si la création avait échoué normalement.
+            const honeypot = document.getElementById('setup-website').value;
+            if (honeypot) {
+                console.warn('Soumission bloquée (honeypot rempli)');
+                return;
+            }
+
             const nom = document.getElementById('setup-nom').value.trim();
             const region = document.getElementById('setup-region').value.trim();
             const surfaceRaw = document.getElementById('setup-surface').value;
