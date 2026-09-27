@@ -377,6 +377,8 @@
     </style>
     <!-- Analytics respectueux de la vie privée (Umami — aucun cookie, aucune bannière requise) -->
     <script defer src="https://cloud.umami.is/script.js" data-website-id="1bd85f0f-6e0f-4ee7-821d-f8a1d218ef55"></script>
+    <!-- Génération de PDF côté navigateur (aucun serveur nécessaire) -->
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
 </head>
 <body>
     <!-- PAGE CHARGEMENT -->
@@ -473,6 +475,10 @@
         <div class="main-content">
             <!-- MENU PRINCIPAL -->
             <section id="menu" class="section active">
+                <div class="form-card" id="carte-meteo-accueil" style="display: none;">
+                    <h3 style="font-size: 14px; margin-bottom: 12px;">🌦️ Météo actuelle</h3>
+                    <div id="meteo-actuelle-contenu"></div>
+                </div>
                 <div class="form-card">
                     <h3 style="margin-bottom: 16px; text-align: center;">🍇 Gestion des traitements</h3>
                     <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
@@ -551,8 +557,9 @@
                         </div>
 
                         <div id="workflow-recap"></div>
+                        <div id="workflow-confirmation"></div>
 
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px;">
+                        <div id="etape3-actions" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px;">
                             <button class="btn-submit" style="background: white; color: var(--text-light); border: 1.5px solid var(--border);" onclick="retourEtape2()">← Retour</button>
                             <button class="btn-submit" id="btn-valider" onclick="validerRapport()">✓ Valider & Archiver</button>
                         </div>
@@ -721,6 +728,115 @@
             }
         }
 
+        // ===== MÉTÉO (Open-Meteo — gratuit, sans clé API) =====
+
+        // Convertit un nom de ville en coordonnées GPS. Ne bloque jamais le reste de l'app
+        // si ça échoue (ville introuvable, pas de réseau...) — retourne simplement null.
+        async function geocoderVille(nomVille) {
+            if (!nomVille) return null;
+            try {
+                const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(nomVille)}&count=1&language=fr&format=json`;
+                const resp = await fetch(url);
+                if (!resp.ok) return null;
+                const data = await resp.json();
+                if (!data.results || data.results.length === 0) return null;
+                return { latitude: data.results[0].latitude, longitude: data.results[0].longitude };
+            } catch (err) {
+                console.warn('Géocodage impossible:', err);
+                return null;
+            }
+        }
+
+        // Météo actuelle, pour la carte d'accueil
+        async function chargerMeteoActuelle() {
+            if (!currentExploitation || !currentExploitation.latitude || !currentExploitation.longitude) return;
+            try {
+                const { latitude, longitude } = currentExploitation;
+                const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,precipitation,wind_speed_10m,wind_gusts_10m&timezone=auto`;
+                const resp = await fetch(url);
+                if (!resp.ok) throw new Error('Réponse météo invalide');
+                const data = await resp.json();
+                const c = data.current;
+
+                document.getElementById('meteo-actuelle-contenu').innerHTML = `
+                    <div class="stat-grid">
+                        <div class="stat-card">
+                            <div class="stat-value" style="font-size: 22px;">${Math.round(c.temperature_2m)}°C</div>
+                            <div class="stat-label">Température</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" style="font-size: 22px;">${Math.round(c.wind_speed_10m)} <span style="font-size:12px;">km/h</span></div>
+                            <div class="stat-label">💨 Vent (rafales ${Math.round(c.wind_gusts_10m)})</div>
+                        </div>
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-light); text-align: center; margin-top: 10px;">
+                        🌧️ ${c.precipitation} mm de pluie actuellement · ${currentExploitation.region || ''}
+                    </div>
+                `;
+                document.getElementById('carte-meteo-accueil').style.display = 'block';
+            } catch (err) {
+                console.warn('Météo actuelle indisponible:', err);
+            }
+        }
+
+        // Bulletin météo pour une plage horaire précise (utilisé pour le compte rendu de traitement).
+        // dateISO: 'YYYY-MM-DD' — heureDebut/heureFin: 'HH:MM'. Retourne null si indisponible
+        // (ne doit jamais empêcher de valider un traitement).
+        async function recupererMeteoTranche(dateISO, heureDebutStr, heureFinStr) {
+            if (!currentExploitation || !currentExploitation.latitude || !currentExploitation.longitude) return null;
+            try {
+                const { latitude, longitude } = currentExploitation;
+                const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&hourly=temperature_2m,precipitation,wind_speed_10m,wind_gusts_10m&timezone=auto&past_days=2&forecast_days=1`;
+                const resp = await fetch(url);
+                if (!resp.ok) throw new Error('Réponse météo invalide');
+                const data = await resp.json();
+
+                const heureDebutH = parseInt(heureDebutStr.split(':')[0], 10);
+                const heureFinH = parseInt(heureFinStr.split(':')[0], 10);
+
+                const heuresRetenues = [];
+                data.hourly.time.forEach((t, i) => {
+                    if (!t.startsWith(dateISO)) return;
+                    const h = parseInt(t.split('T')[1].split(':')[0], 10);
+                    if (h >= heureDebutH && h <= heureFinH) {
+                        heuresRetenues.push({
+                            heure: t.split('T')[1],
+                            temperature: data.hourly.temperature_2m[i],
+                            vent: data.hourly.wind_speed_10m[i],
+                            rafale: data.hourly.wind_gusts_10m[i],
+                            pluie: data.hourly.precipitation[i]
+                        });
+                    }
+                });
+
+                if (heuresRetenues.length === 0) return null;
+
+                const moyenne = (arr) => arr.reduce((s, v) => s + v, 0) / arr.length;
+                return {
+                    temperature_moyenne: Math.round(moyenne(heuresRetenues.map(h => h.temperature)) * 10) / 10,
+                    vent_moyen: Math.round(moyenne(heuresRetenues.map(h => h.vent)) * 10) / 10,
+                    rafale_max: Math.round(Math.max(...heuresRetenues.map(h => h.rafale)) * 10) / 10,
+                    pluie_totale: Math.round(heuresRetenues.reduce((s, h) => s + h.pluie, 0) * 10) / 10,
+                    detail_heures: heuresRetenues,
+                    source: 'Open-Meteo'
+                };
+            } catch (err) {
+                console.warn('Météo tranche horaire indisponible:', err);
+                return null;
+            }
+        }
+
+        function formaterBlocMeteo(meteo) {
+            if (!meteo) return '<div style="font-size: 12px; color: var(--text-light);">Météo indisponible pour cette période.</div>';
+            return `
+                <div style="font-size: 13px;">
+                    💨 Vent moyen : <strong>${meteo.vent_moyen} km/h</strong> (rafales max <strong>${meteo.rafale_max} km/h</strong>)<br>
+                    🌡️ Température moyenne : <strong>${meteo.temperature_moyenne}°C</strong><br>
+                    🌧️ Pluie cumulée : <strong>${meteo.pluie_totale} mm</strong>
+                </div>
+            `;
+        }
+
         async function verifierExploitationExistante() {
             const { data, error } = await supabaseClient
                 .from('exploitations')
@@ -733,6 +849,23 @@
             if (data && data.length > 0) {
                 currentExploitation = data[0];
                 document.getElementById('exploitation-name').textContent = currentExploitation.nom;
+
+                // Auto-réparation : les exploitations créées avant l'ajout de la météo n'ont pas
+                // encore de coordonnées GPS. On les calcule une fois, silencieusement.
+                if (!currentExploitation.latitude && currentExploitation.region) {
+                    const coords = await geocoderVille(currentExploitation.region);
+                    if (coords) {
+                        const { data: updated } = await supabaseClient
+                            .from('exploitations')
+                            .update(coords)
+                            .eq('id', currentExploitation.id)
+                            .select()
+                            .single();
+                        if (updated) currentExploitation = updated;
+                    }
+                }
+
+                chargerMeteoActuelle();
                 return true;
             }
             return false;
@@ -765,13 +898,17 @@
             try {
                 document.getElementById('btn-setup').disabled = true;
 
+                const coords = await geocoderVille(region);
+
                 const { data: newExploit, error } = await supabaseClient
                     .from('exploitations')
                     .insert([{
                         nom,
                         region: region || null,
                         surface_totale: surfaceRaw ? parseFloat(surfaceRaw) : null,
-                        admin_id: currentUser.id
+                        admin_id: currentUser.id,
+                        latitude: coords ? coords.latitude : null,
+                        longitude: coords ? coords.longitude : null
                     }])
                     .select()
                     .single();
@@ -790,6 +927,7 @@
                 afficherMenu();
                 afficherHisto();
                 afficherReglages();
+                chargerMeteoActuelle();
             } catch (err) {
                 console.error('Erreur création exploitation:', err);
                 alert('Erreur: ' + messageErreur(err));
@@ -812,13 +950,22 @@
             }
 
             try {
+                const villeAChangee = region !== (currentExploitation.region || '');
+                const coords = villeAChangee ? await geocoderVille(region) : null;
+
+                const updatePayload = {
+                    nom,
+                    region: region || null,
+                    surface_totale: surfaceRaw ? parseFloat(surfaceRaw) : null
+                };
+                if (villeAChangee) {
+                    updatePayload.latitude = coords ? coords.latitude : null;
+                    updatePayload.longitude = coords ? coords.longitude : null;
+                }
+
                 const { data, error } = await supabaseClient
                     .from('exploitations')
-                    .update({
-                        nom,
-                        region: region || null,
-                        surface_totale: surfaceRaw ? parseFloat(surfaceRaw) : null
-                    })
+                    .update(updatePayload)
                     .eq('id', currentExploitation.id)
                     .select()
                     .single();
@@ -828,6 +975,7 @@
                 currentExploitation = data;
                 document.getElementById('exploitation-name').textContent = currentExploitation.nom;
                 alert('✓ Exploitation mise à jour');
+                chargerMeteoActuelle();
             } catch (err) {
                 console.error('Erreur mise à jour exploitation:', err);
                 alert('Erreur: ' + messageErreur(err));
@@ -1246,15 +1394,23 @@
             afficherEtape3();
         }
 
-        function afficherEtape3() {
+        async function afficherEtape3() {
             document.getElementById('step1').style.display = 'none';
             document.getElementById('step2').style.display = 'none';
             document.getElementById('step3').style.display = 'block';
+            document.getElementById('workflow-confirmation').innerHTML = '';
+            document.getElementById('etape3-actions').style.display = 'grid';
+            document.getElementById('btn-valider').disabled = false;
 
+            // Ces valeurs sont figées ici, une seule fois, et réutilisées telles quelles
+            // par validerRapport() — pour ne jamais avoir un écart entre ce qui est affiché
+            // et ce qui est réellement enregistré.
             const fin = new Date();
-            const duree = Math.round((fin - workflowEnCours.debutTime) / 60000);
-            const heureFin = fin.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-            const totalSurf = workflowEnCours.parcelles.reduce((s, p) => {
+            workflowEnCours.finTime = fin;
+            workflowEnCours.heureFin = fin.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+            workflowEnCours.duree = Math.round((fin - workflowEnCours.debutTime) / 60000);
+            workflowEnCours.dateISO = new Date().toISOString().split('T')[0];
+            workflowEnCours.totalSurf = workflowEnCours.parcelles.reduce((s, p) => {
                 const parc = parcelles.find(x => x.nom === p.nom);
                 return s + (parc ? parc.surface : 0);
             }, 0);
@@ -1268,15 +1424,25 @@
                     <strong>📅 Date</strong><div style="font-size: 13px; margin-top: 4px;">${new Date().toLocaleDateString('fr-FR')}</div>
                 </div>
                 <div class="item-card" style="margin-bottom: 12px;">
-                    <strong>⏱️ Durée</strong><div style="font-size: 13px; margin-top: 4px;">${workflowEnCours.heureDebut} → ${heureFin} (${duree} min)</div>
+                    <strong>⏱️ Durée</strong><div style="font-size: 13px; margin-top: 4px;">${workflowEnCours.heureDebut} → ${workflowEnCours.heureFin} (${workflowEnCours.duree} min)</div>
                 </div>
                 <div class="item-card" style="margin-bottom: 12px;">
-                    <strong>📍 Parcelles traitées (${totalSurf.toFixed(2)} ha)</strong><div style="font-size: 12px; margin-top: 6px; color: var(--text-light);">${parcHtml}</div>
+                    <strong>📍 Parcelles traitées (${workflowEnCours.totalSurf.toFixed(2)} ha)</strong><div style="font-size: 12px; margin-top: 6px; color: var(--text-light);">${parcHtml}</div>
                 </div>
                 <div class="item-card" style="margin-bottom: 12px;">
                     <strong>🧴 Produits</strong><div style="font-size: 12px; margin-top: 6px; color: var(--text-light);">${prodHtml}</div>
                 </div>
+                <div class="item-card" id="carte-meteo-recap" style="margin-bottom: 12px;">
+                    <strong>🌦️ Météo pendant la pulvérisation</strong>
+                    <div id="meteo-recap-contenu" style="margin-top: 6px;">
+                        <span style="font-size: 12px; color: var(--text-light);">Récupération du bulletin météo...</span>
+                    </div>
+                </div>
             `;
+
+            workflowEnCours.meteo = await recupererMeteoTranche(workflowEnCours.dateISO, workflowEnCours.heureDebut, workflowEnCours.heureFin);
+            const meteoContenu = document.getElementById('meteo-recap-contenu');
+            if (meteoContenu) meteoContenu.innerHTML = formaterBlocMeteo(workflowEnCours.meteo);
         }
 
         function retourEtape1() {
@@ -1293,40 +1459,45 @@
             try {
                 document.getElementById('btn-valider').disabled = true;
 
-                const fin = new Date();
-                const duree = Math.round((fin - workflowEnCours.debutTime) / 60000);
-                const heureFin = fin.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-                const totalSurf = workflowEnCours.parcelles.reduce((s, p) => {
-                    const parc = parcelles.find(x => x.nom === p.nom);
-                    return s + (parc ? parc.surface : 0);
-                }, 0);
-
                 const rapport = {
                     exploitation_id: currentExploitation.id,
-                    date: new Date().toISOString().split('T')[0],
+                    date: workflowEnCours.dateISO,
                     heure_debut: workflowEnCours.heureDebut,
-                    heure_fin: heureFin,
-                    duree_minutes: duree,
+                    heure_fin: workflowEnCours.heureFin,
+                    duree_minutes: workflowEnCours.duree,
                     parcelles: workflowEnCours.parcelles,
                     produits: workflowEnCours.doses,
-                    surface_traitee: totalSurf,
+                    surface_traitee: workflowEnCours.totalSurf,
                     volume_preparé: workflowEnCours.volume,
+                    meteo: workflowEnCours.meteo || null,
                     created_by: currentUser.id
                 };
 
-                const { error } = await supabaseClient
+                const { data: rapportEnregistre, error } = await supabaseClient
                     .from('traitements')
-                    .insert([rapport]);
+                    .insert([rapport])
+                    .select()
+                    .single();
 
                 if (error) throw error;
 
-                alert('✓ Compte rendu archivé dans Supabase');
-                workflowEnCours = null;
-                document.getElementById('btn-valider').disabled = false;
                 await chargerTraitements();
-                switchView('menu');
                 afficherMenu();
                 afficherHisto();
+
+                // On garde l'utilisateur sur l'étape 3, avec une confirmation claire et
+                // le choix de télécharger le PDF tout de suite plutôt que de naviguer d'office.
+                document.getElementById('etape3-actions').style.display = 'none';
+                document.getElementById('workflow-confirmation').innerHTML = `
+                    <div class="item-card" style="border-left-color: var(--success); text-align: center; padding: 16px;">
+                        <strong style="color: var(--success);">✓ Compte rendu archivé</strong>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px;">
+                            <button class="btn-submit" onclick='genererPDFTraitement(${JSON.stringify(rapportEnregistre).replace(/'/g, "&apos;")})'>📄 Télécharger le PDF</button>
+                            <button class="btn-submit" style="background: white; color: var(--primary); border: 1.5px solid var(--border);" onclick="workflowEnCours = null; switchView('menu');">🏠 Retour à l'accueil</button>
+                        </div>
+                    </div>
+                `;
+
             } catch (err) {
                 console.error('Erreur sauvegarde:', err);
                 alert('Erreur: ' + messageErreur(err));
@@ -1370,6 +1541,7 @@
                 <div class="item-card">
                     <div class="item-row" style="margin-bottom: 6px;">
                         <strong style="font-size: 14px; color: var(--primary);">📋 ${new Date(t.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</strong>
+                        <button class="btn-icon-delete" title="Télécharger le PDF" style="color: var(--primary);" onclick="genererPDFTraitement(traitements[${i}])">📄</button>
                     </div>
                     <div style="font-size: 12px; color: var(--text-light);">
                         ⏱️ ${t.heure_debut} → ${t.heure_fin} <span style="opacity: 0.6;">(${t.duree_minutes} min)</span>
@@ -1377,6 +1549,7 @@
                     <div style="font-size: 13px; margin-top: 6px;">
                         <strong>${t.parcelles.length}</strong> parcelle${t.parcelles.length > 1 ? 's' : ''} · <strong>${t.surface_traitee.toFixed(2)} ha</strong>
                     </div>
+                    ${t.meteo ? `<div style="font-size: 11px; color: var(--text-light); margin-top: 6px;">💨 ${t.meteo.vent_moyen} km/h (rafales ${t.meteo.rafale_max}) · 🌧️ ${t.meteo.pluie_totale} mm</div>` : ''}
                 </div>
             `).join('');
         }
@@ -1422,6 +1595,87 @@
                         ${p.exploitation_id ? `<button class="btn-icon-delete" title="Supprimer" onclick="supprimerProduit('${p.id}', '${p.nom.replace(/'/g, "\\'")}')">✕</button>` : ''}
                     </div>
                 `).join('');
+            }
+        }
+
+        // ===== GÉNÉRATION PDF (jsPDF — 100% côté navigateur, aucun serveur) =====
+        function genererPDFTraitement(t) {
+            try {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+                const marge = 18;
+                let y = 20;
+                const largeurUtile = 210 - marge * 2;
+
+                const ligne = (texte, taille, gras, couleur) => {
+                    doc.setFontSize(taille);
+                    doc.setFont('helvetica', gras ? 'bold' : 'normal');
+                    if (couleur) doc.setTextColor(...couleur); else doc.setTextColor(30, 30, 30);
+                    doc.text(texte, marge, y);
+                };
+                const sousTitre = (texte) => {
+                    y += 9;
+                    ligne(texte, 12, true, [45, 80, 22]);
+                    doc.setDrawColor(184, 134, 11);
+                    doc.line(marge, y + 2, marge + largeurUtile, y + 2);
+                    y += 7;
+                };
+
+                // En-tête
+                ligne('PhytoLog', 22, true, [45, 80, 22]);
+                y += 6;
+                ligne('Compte rendu de traitement phytosanitaire', 11, false, [107, 107, 107]);
+                y += 2;
+                doc.setDrawColor(220, 220, 220);
+                doc.line(marge, y + 3, marge + largeurUtile, y + 3);
+
+                sousTitre('Exploitation');
+                ligne(currentExploitation ? currentExploitation.nom : '—', 11, false);
+                if (currentExploitation && currentExploitation.region) {
+                    y += 6;
+                    ligne(currentExploitation.region, 10, false, [107, 107, 107]);
+                }
+
+                sousTitre('Date et horaires');
+                ligne(`Date : ${new Date(t.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}`, 11, false);
+                y += 6;
+                ligne(`Début : ${t.heure_debut}   →   Fin : ${t.heure_fin}   (durée : ${t.duree_minutes} min)`, 11, false);
+
+                sousTitre(`Parcelles traitées (${Number(t.surface_traitee).toFixed(2)} ha au total)`);
+                (t.parcelles || []).forEach(p => {
+                    ligne(`• ${p.nom} — ${p.time}`, 10, false);
+                    y += 5.5;
+                });
+
+                sousTitre('Produits appliqués');
+                Object.entries(t.produits || {}).forEach(([nom, dose]) => {
+                    ligne(`• ${nom} : ${Number(dose).toFixed(1)} L/ha`, 10, false);
+                    y += 5.5;
+                });
+
+                sousTitre('Bulletin météo pendant la pulvérisation');
+                if (t.meteo) {
+                    ligne(`Vent moyen : ${t.meteo.vent_moyen} km/h  (rafales max : ${t.meteo.rafale_max} km/h)`, 10, false);
+                    y += 5.5;
+                    ligne(`Température moyenne : ${t.meteo.temperature_moyenne}°C`, 10, false);
+                    y += 5.5;
+                    ligne(`Pluie cumulée : ${t.meteo.pluie_totale} mm`, 10, false);
+                    y += 5.5;
+                    ligne('Source : Open-Meteo', 8, false, [150, 150, 150]);
+                } else {
+                    ligne('Non disponible pour ce traitement.', 10, false, [150, 150, 150]);
+                }
+
+                // Pied de page
+                y = 280;
+                doc.setDrawColor(220, 220, 220);
+                doc.line(marge, y - 5, marge + largeurUtile, y - 5);
+                ligne('Généré automatiquement par PhytoLog. Vérifie toujours l\'autorisation et la dose homologuée sur ephy.anses.fr', 8, false, [150, 150, 150]);
+
+                doc.save(`phytolog-traitement-${t.date}.pdf`);
+            } catch (err) {
+                console.error('Erreur génération PDF:', err);
+                alert('Erreur lors de la génération du PDF: ' + messageErreur(err));
             }
         }
 
