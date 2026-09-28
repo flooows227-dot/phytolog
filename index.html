@@ -427,6 +427,14 @@
                 <input type="text" id="setup-region" class="form-input" placeholder="Ex: Cotignac">
             </div>
             <div class="form-group" style="text-align: left;">
+                <label class="form-label">Code postal</label>
+                <input type="text" id="setup-cp" class="form-input" inputmode="numeric" maxlength="5" placeholder="Ex: 83570">
+            </div>
+            <div class="form-group" style="text-align: left;">
+                <button type="button" class="btn-submit" style="background: white; color: var(--primary); border: 1.5px solid var(--border);" onclick="localiserSetupGPS()">📍 Me localiser (GPS)</button>
+                <div id="setup-gps-statut" style="font-size: 12px; color: var(--text-light); margin-top: 6px;">Optionnel : plus précis que la ville, utile si tu es sur ton exploitation.</div>
+            </div>
+            <div class="form-group" style="text-align: left;">
                 <label class="form-label">Surface totale (ha, optionnel)</label>
                 <input type="number" id="setup-surface" class="form-input" step="0.1" placeholder="Ex: 19.5">
             </div>
@@ -588,10 +596,20 @@
                         <input type="text" id="reg-exploit-region" class="form-input">
                     </div>
                     <div class="form-group">
+                        <label class="form-label">Code postal</label>
+                        <input type="text" id="reg-exploit-cp" class="form-input" inputmode="numeric" maxlength="5" placeholder="Ex: 83570">
+                    </div>
+                    <div class="form-group">
                         <label class="form-label">Surface totale (ha)</label>
                         <input type="number" id="reg-exploit-surface" class="form-input" step="0.1">
                     </div>
                     <button class="btn-submit" onclick="mettreAJourExploitation()">✓ Enregistrer</button>
+
+                    <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
+                        <label class="form-label">📍 Position utilisée pour la météo</label>
+                        <div id="reg-localisation-statut" style="font-size: 13px; margin-bottom: 10px;"></div>
+                        <button class="btn-submit" style="background: white; color: var(--primary); border: 1.5px solid var(--border);" onclick="localiserAvecGPS()">📍 Me localiser (GPS)</button>
+                    </div>
                 </div>
 
                 <div class="form-card">
@@ -663,6 +681,7 @@
         let produits = [];
         let traitements = [];
         let workflowEnCours = null;
+        let positionGPSSetup = null; // position obtenue par "Me localiser" pendant la création de l'exploitation
 
         // Note: les produits et parcelles sont désormais gérés par exploitation
         // via l'onglet Réglages, plus de liste figée imposée à tous les comptes.
@@ -747,6 +766,134 @@
             }
         }
 
+        // Met un texte en minuscules, sans accents ni ponctuation, pour comparer deux noms de communes
+        function normaliserNom(s) {
+            return (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        }
+
+        // Lit le centre d'une commune renvoyée par l'API Géo (format GeoJSON : [longitude, latitude])
+        function extraireCentreCommune(commune) {
+            const coords = commune && commune.centre && commune.centre.coordinates;
+            if (!Array.isArray(coords) || coords.length < 2) return null;
+            let longitude = Number(coords[0]);
+            let latitude = Number(coords[1]);
+            if (!isFinite(latitude) || !isFinite(longitude)) return null;
+            // Garde-fou : en France métropolitaine, la latitude vaut ~41 à 51 et la longitude ~-5 à 10.
+            // Si on lit l'inverse (latitude petite, longitude > 30), l'ordre était inversé : on corrige.
+            // (Non appliqué aux DROM, codes postaux 97x/98x, dont les valeurs sont différentes.)
+            const codePostal = ((commune.codesPostaux || [])[0] || '');
+            const metropole = !/^9[78]/.test(codePostal);
+            if (metropole && latitude < 30 && longitude > 30) {
+                [latitude, longitude] = [longitude, latitude];
+            }
+            return { latitude, longitude };
+        }
+
+        // Localise une exploitation à partir de la ville ET du code postal.
+        // 1) API Géo de l'État (gratuite, sans clé) : le code postal peut couvrir plusieurs communes,
+        //    on retient celle dont le nom correspond à la ville saisie.
+        // 2) Sinon recherche par nom seul (API Géo), puis en dernier recours Open-Meteo (monde entier).
+        // Retourne { latitude, longitude, libelle } ou null. Ne lève jamais d'erreur.
+        async function geocoderLocalisation(ville, codePostal) {
+            const villeNorm = normaliserNom(ville);
+            const champs = 'nom,centre,codesPostaux';
+            try {
+                if (codePostal && /^\d{5}$/.test(codePostal)) {
+                    const resp = await fetch(`https://geo.api.gouv.fr/communes?codePostal=${codePostal}&fields=${champs}`);
+                    const communes = resp.ok ? await resp.json() : [];
+                    if (communes.length > 0) {
+                        const choisie = (villeNorm && communes.find(c => normaliserNom(c.nom) === villeNorm))
+                            || (villeNorm && communes.find(c => normaliserNom(c.nom).includes(villeNorm) || villeNorm.includes(normaliserNom(c.nom))))
+                            || communes[0];
+                        const centre = extraireCentreCommune(choisie);
+                        if (centre) return { ...centre, libelle: `${choisie.nom} (${codePostal})` };
+                    }
+                }
+                if (ville) {
+                    const resp = await fetch(`https://geo.api.gouv.fr/communes?nom=${encodeURIComponent(ville)}&fields=${champs}&boost=population&limit=1`);
+                    const res = resp.ok ? await resp.json() : [];
+                    const centre = res.length > 0 ? extraireCentreCommune(res[0]) : null;
+                    if (centre) return { ...centre, libelle: res[0].nom };
+                }
+            } catch (err) {
+                console.warn('API Géo indisponible, essai avec Open-Meteo:', err);
+            }
+            const secours = await geocoderVille(ville);
+            return secours ? { ...secours, libelle: ville } : null;
+        }
+
+        // Demande la position GPS à l'appareil (le navigateur affiche une demande d'autorisation)
+        function demanderPositionGPS() {
+            return new Promise((resolve, reject) => {
+                if (!navigator.geolocation) {
+                    reject(new Error('La géolocalisation n\'est pas disponible sur cet appareil.'));
+                    return;
+                }
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => resolve({
+                        latitude: Math.round(pos.coords.latitude * 10000) / 10000,
+                        longitude: Math.round(pos.coords.longitude * 10000) / 10000
+                    }),
+                    (err) => reject(new Error(err.code === 1
+                        ? 'Accès à la position refusé. Autorise la localisation pour ce site dans les réglages de ton navigateur, puis réessaie.'
+                        : 'Position introuvable. Réessaie en extérieur ou avec une meilleure connexion.')),
+                    { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
+                );
+            });
+        }
+
+        // Écran de création : mémorise la position GPS, utilisée au moment de créer l'exploitation
+        async function localiserSetupGPS() {
+            const statut = document.getElementById('setup-gps-statut');
+            statut.textContent = 'Localisation en cours...';
+            try {
+                positionGPSSetup = await demanderPositionGPS();
+                statut.textContent = `✅ Position enregistrée (${positionGPSSetup.latitude}, ${positionGPSSetup.longitude})`;
+            } catch (err) {
+                positionGPSSetup = null;
+                statut.textContent = '⚠️ ' + messageErreur(err);
+            }
+        }
+
+        // Réglages : enregistre directement la position GPS comme position de l'exploitation
+        async function localiserAvecGPS() {
+            if (!currentExploitation) {
+                alert('Ton exploitation n\'est pas encore chargée. Recharge la page et réessaie.');
+                return;
+            }
+            const statut = document.getElementById('reg-localisation-statut');
+            statut.textContent = 'Localisation en cours...';
+            try {
+                const position = await demanderPositionGPS();
+                const { data, error } = await supabaseClient
+                    .from('exploitations')
+                    .update(position)
+                    .eq('id', currentExploitation.id)
+                    .select()
+                    .single();
+                if (error) throw error;
+                currentExploitation = data;
+                afficherStatutLocalisation();
+                chargerMeteoActuelle();
+            } catch (err) {
+                afficherStatutLocalisation();
+                alert('Erreur: ' + messageErreur(err));
+            }
+        }
+
+        // Affiche dans Réglages la position utilisée pour la météo, avec un lien carte pour vérifier
+        function afficherStatutLocalisation() {
+            const el = document.getElementById('reg-localisation-statut');
+            if (!el) return;
+            if (currentExploitation && currentExploitation.latitude && currentExploitation.longitude) {
+                const lat = currentExploitation.latitude;
+                const lon = currentExploitation.longitude;
+                el.innerHTML = `✅ ${Number(lat).toFixed(4)}, ${Number(lon).toFixed(4)} · <a href="https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=13/${lat}/${lon}" target="_blank" rel="noopener" style="color: var(--primary); font-weight: 600;">Voir sur la carte ↗</a>`;
+            } else {
+                el.innerHTML = '⚠️ Position inconnue. Renseigne ta ville et ton code postal puis clique Enregistrer, ou utilise 📍 Me localiser. Sans position, la météo est indisponible.';
+            }
+        }
+
         // Météo actuelle, pour la carte d'accueil
         async function chargerMeteoActuelle() {
             if (!currentExploitation || !currentExploitation.latitude || !currentExploitation.longitude) return;
@@ -780,9 +927,9 @@
         }
 
         // Bulletin météo pour une plage horaire précise (utilisé pour le compte rendu de traitement).
-        // dateISO: 'YYYY-MM-DD' — heureDebut/heureFin: 'HH:MM'. Retourne null si indisponible
+        // debut / fin : objets Date. Retourne null si indisponible
         // (ne doit jamais empêcher de valider un traitement).
-        async function recupererMeteoTranche(dateISO, heureDebutStr, heureFinStr) {
+        async function recupererMeteoTranche(debut, fin) {
             if (!currentExploitation || !currentExploitation.latitude || !currentExploitation.longitude) return null;
             try {
                 const { latitude, longitude } = currentExploitation;
@@ -791,14 +938,13 @@
                 if (!resp.ok) throw new Error('Réponse météo invalide');
                 const data = await resp.json();
 
-                const heureDebutH = parseInt(heureDebutStr.split(':')[0], 10);
-                const heureFinH = parseInt(heureFinStr.split(':')[0], 10);
-
+                // Chaque valeur horaire couvre [heure, heure + 1h]. On garde toutes les heures qui
+                // chevauchent la plage de pulvérisation [debut, fin] — y compris à cheval sur minuit.
                 const heuresRetenues = [];
                 data.hourly.time.forEach((t, i) => {
-                    if (!t.startsWith(dateISO)) return;
-                    const h = parseInt(t.split('T')[1].split(':')[0], 10);
-                    if (h >= heureDebutH && h <= heureFinH) {
+                    const debutHeure = new Date(t); // "2026-09-28T06:00" = heure locale de l'exploitation
+                    const finHeure = new Date(debutHeure.getTime() + 3600000);
+                    if (debutHeure <= fin && finHeure > debut) {
                         heuresRetenues.push({
                             heure: t.split('T')[1],
                             temperature: data.hourly.temperature_2m[i],
@@ -827,7 +973,13 @@
         }
 
         function formaterBlocMeteo(meteo) {
-            if (!meteo) return '<div style="font-size: 12px; color: var(--text-light);">Météo indisponible pour cette période.</div>';
+            if (!meteo) {
+                const sansPosition = !currentExploitation || !currentExploitation.latitude || !currentExploitation.longitude;
+                const raison = sansPosition
+                    ? '⚠️ Position de l\'exploitation inconnue : renseigne ta ville et ton code postal (ou utilise 📍 Me localiser) dans l\'onglet Réglages.'
+                    : 'Météo indisponible pour cette période (service momentanément injoignable).';
+                return `<div style="font-size: 12px; color: var(--text-light);">${raison}</div>`;
+            }
             return `
                 <div style="font-size: 13px;">
                     💨 Vent moyen : <strong>${meteo.vent_moyen} km/h</strong> (rafales max <strong>${meteo.rafale_max} km/h</strong>)<br>
@@ -850,14 +1002,14 @@
                 currentExploitation = data[0];
                 document.getElementById('exploitation-name').textContent = currentExploitation.nom;
 
-                // Auto-réparation : les exploitations créées avant l'ajout de la météo n'ont pas
-                // encore de coordonnées GPS. On les calcule une fois, silencieusement.
-                if (!currentExploitation.latitude && currentExploitation.region) {
-                    const coords = await geocoderVille(currentExploitation.region);
-                    if (coords) {
+                // Auto-réparation : si l'exploitation n'a pas encore de coordonnées GPS, on les calcule
+                // silencieusement à partir de la ville et du code postal.
+                if (!currentExploitation.latitude && (currentExploitation.region || currentExploitation.code_postal)) {
+                    const loc = await geocoderLocalisation(currentExploitation.region, currentExploitation.code_postal);
+                    if (loc) {
                         const { data: updated } = await supabaseClient
                             .from('exploitations')
-                            .update(coords)
+                            .update({ latitude: loc.latitude, longitude: loc.longitude })
                             .eq('id', currentExploitation.id)
                             .select()
                             .single();
@@ -882,11 +1034,17 @@
 
             const nom = document.getElementById('setup-nom').value.trim();
             const region = document.getElementById('setup-region').value.trim();
+            const codePostal = document.getElementById('setup-cp').value.trim();
             const surfaceRaw = document.getElementById('setup-surface').value;
 
             if (!nom) {
                 alert('Le nom de l\'exploitation est obligatoire');
                 document.getElementById('setup-nom').focus();
+                return;
+            }
+            if (codePostal && !/^\d{5}$/.test(codePostal)) {
+                alert('Le code postal doit comporter 5 chiffres (ou laisse le champ vide)');
+                document.getElementById('setup-cp').focus();
                 return;
             }
             if (surfaceRaw && (isNaN(parseFloat(surfaceRaw)) || parseFloat(surfaceRaw) <= 0)) {
@@ -898,13 +1056,16 @@
             try {
                 document.getElementById('btn-setup').disabled = true;
 
-                const coords = await geocoderVille(region);
+                // La position GPS (si l'utilisateur a cliqué "Me localiser") est prioritaire ;
+                // sinon on localise à partir de la ville et du code postal.
+                const coords = positionGPSSetup || await geocoderLocalisation(region, codePostal);
 
                 const { data: newExploit, error } = await supabaseClient
                     .from('exploitations')
                     .insert([{
                         nom,
                         region: region || null,
+                        code_postal: codePostal || null,
                         surface_totale: surfaceRaw ? parseFloat(surfaceRaw) : null,
                         admin_id: currentUser.id,
                         latitude: coords ? coords.latitude : null,
@@ -942,25 +1103,39 @@
             }
             const nom = document.getElementById('reg-exploit-nom').value.trim();
             const region = document.getElementById('reg-exploit-region').value.trim();
+            const codePostal = document.getElementById('reg-exploit-cp').value.trim();
             const surfaceRaw = document.getElementById('reg-exploit-surface').value;
 
             if (!nom) {
                 alert('Le nom est obligatoire');
                 return;
             }
+            if (codePostal && !/^\d{5}$/.test(codePostal)) {
+                alert('Le code postal doit comporter 5 chiffres (ou laisse le champ vide)');
+                document.getElementById('reg-exploit-cp').focus();
+                return;
+            }
 
             try {
-                const villeAChangee = region !== (currentExploitation.region || '');
-                const coords = villeAChangee ? await geocoderVille(region) : null;
+                // On recalcule la position si la ville ou le code postal ont changé, ou si aucune
+                // position n'est enregistrée (cliquer sur Enregistrer permet alors de réessayer).
+                // Une position GPS déjà enregistrée est conservée tant que la ville/CP ne changent pas.
+                const localisationAChangee = region !== (currentExploitation.region || '')
+                    || codePostal !== (currentExploitation.code_postal || '')
+                    || !currentExploitation.latitude;
+                const loc = (localisationAChangee && (region || codePostal))
+                    ? await geocoderLocalisation(region, codePostal)
+                    : null;
 
                 const updatePayload = {
                     nom,
                     region: region || null,
+                    code_postal: codePostal || null,
                     surface_totale: surfaceRaw ? parseFloat(surfaceRaw) : null
                 };
-                if (villeAChangee) {
-                    updatePayload.latitude = coords ? coords.latitude : null;
-                    updatePayload.longitude = coords ? coords.longitude : null;
+                if (localisationAChangee) {
+                    updatePayload.latitude = loc ? loc.latitude : null;
+                    updatePayload.longitude = loc ? loc.longitude : null;
                 }
 
                 const { data, error } = await supabaseClient
@@ -974,7 +1149,15 @@
 
                 currentExploitation = data;
                 document.getElementById('exploitation-name').textContent = currentExploitation.nom;
-                alert('✓ Exploitation mise à jour');
+                afficherStatutLocalisation();
+
+                let message = '✓ Exploitation mise à jour';
+                if (localisationAChangee) {
+                    message += loc
+                        ? `\n📍 Position trouvée : ${loc.libelle}`
+                        : '\n⚠️ Position introuvable avec cette ville / ce code postal. Vérifie l\'orthographe, ou utilise 📍 Me localiser.';
+                }
+                alert(message);
                 chargerMeteoActuelle();
             } catch (err) {
                 console.error('Erreur mise à jour exploitation:', err);
@@ -1409,7 +1592,9 @@
             workflowEnCours.finTime = fin;
             workflowEnCours.heureFin = fin.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
             workflowEnCours.duree = Math.round((fin - workflowEnCours.debutTime) / 60000);
-            workflowEnCours.dateISO = new Date().toISOString().split('T')[0];
+            // Date du traitement en heure LOCALE (toISOString donnerait la date UTC, décalée de 1-2 h en France)
+            const debutT = workflowEnCours.debutTime;
+            workflowEnCours.dateISO = `${debutT.getFullYear()}-${String(debutT.getMonth() + 1).padStart(2, '0')}-${String(debutT.getDate()).padStart(2, '0')}`;
             workflowEnCours.totalSurf = workflowEnCours.parcelles.reduce((s, p) => {
                 const parc = parcelles.find(x => x.nom === p.nom);
                 return s + (parc ? parc.surface : 0);
@@ -1440,7 +1625,7 @@
                 </div>
             `;
 
-            workflowEnCours.meteo = await recupererMeteoTranche(workflowEnCours.dateISO, workflowEnCours.heureDebut, workflowEnCours.heureFin);
+            workflowEnCours.meteo = await recupererMeteoTranche(workflowEnCours.debutTime, workflowEnCours.finTime);
             const meteoContenu = document.getElementById('meteo-recap-contenu');
             if (meteoContenu) meteoContenu.innerHTML = formaterBlocMeteo(workflowEnCours.meteo);
         }
@@ -1562,8 +1747,11 @@
             if (document.activeElement !== nomInput) nomInput.value = currentExploitation.nom || '';
             const regionInput = document.getElementById('reg-exploit-region');
             if (document.activeElement !== regionInput) regionInput.value = currentExploitation.region || '';
+            const cpInput = document.getElementById('reg-exploit-cp');
+            if (document.activeElement !== cpInput) cpInput.value = currentExploitation.code_postal || '';
             const surfaceInput = document.getElementById('reg-exploit-surface');
             if (document.activeElement !== surfaceInput) surfaceInput.value = currentExploitation.surface_totale || '';
+            afficherStatutLocalisation();
 
             // Bloc parcelles
             const parcCont = document.getElementById('reglages-parcelles-list');

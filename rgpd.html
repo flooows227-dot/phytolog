@@ -31,7 +31,9 @@
 
     <h2>2. Quelles données sont collectées ?</h2>
     <ul>
-        <li>Informations sur l'exploitation : nom, ville, surface totale</li>
+        <li>Informations sur l'exploitation : nom, ville, code postal, surface totale</li>
+        <li>Position de l'exploitation (coordonnées GPS), déduite de la ville et du code postal, ou enregistrée uniquement si vous appuyez sur le bouton « Me localiser »</li>
+        <li>Bulletin météo de chaque traitement (vent, rafales, pluie, température pendant la plage horaire de pulvérisation)</li>
         <li>Parcelles : nom, cépage, surface</li>
         <li>Produits phytosanitaires utilisés et leurs doses</li>
         <li>Historique des traitements réalisés (dates, horaires, parcelles, produits)</li>
@@ -50,7 +52,10 @@
     <h2>6. Vos droits</h2>
     <p>Conformément au RGPD, vous disposez d'un droit d'accès, de rectification, d'effacement et de portabilité de vos données. Pour exercer ces droits, contactez : [email de contact].</p>
 
-    <h2>7. Cookies et traceurs</h2>
+    <h2>7. Services tiers</h2>
+    <p>Pour localiser l'exploitation et obtenir la météo, PhytoLog interroge deux services depuis votre navigateur : l'API Géo de l'État (geo.api.gouv.fr), à qui sont transmis la ville et le code postal saisis, et Open-Meteo (open-meteo.com), à qui sont transmises les coordonnées de l'exploitation. Comme pour toute requête internet, votre adresse IP est visible de ces services.</p>
+
+    <h2>8. Cookies et traceurs</h2>
     <p>PhytoLog n'utilise pas de cookies. L'application utilise le stockage local du navigateur (localStorage) uniquement pour retenir un identifiant technique propre à votre appareil, nécessaire au fonctionnement du service — aucune donnée n'est partagée avec des tiers à des fins publicitaires.</p>
 </div>
 </body>
