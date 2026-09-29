@@ -525,7 +525,9 @@
 
                         <div class="form-group">
                             <label class="form-label">Produits</label>
-                            <div id="workflow-produits"></div>
+                            <input type="text" id="workflow-produits-recherche" class="form-input" placeholder="🔍 Rechercher (nom, cible : mildiou, oïdium...)" style="margin-bottom: 8px;" oninput="filtrerProduits(this.value)">
+                            <div id="workflow-produits-compte" style="font-size: 11px; color: var(--text-light); margin-bottom: 6px;"></div>
+                            <div id="workflow-produits" style="max-height: 340px; overflow-y: auto;"></div>
                         </div>
                         <div id="workflow-resultats"></div>
 
@@ -551,6 +553,23 @@
 
                         <label class="form-label">Cocher les parcelles au fur et à mesure</label>
                         <div id="workflow-parcelles"></div>
+
+                        <button type="button" class="btn-submit" style="background: white; color: var(--primary); border: 1.5px solid var(--border); margin-top: 10px;" onclick="basculerFormulaireNouvelleParcelle()">+ Nouvelle parcelle</button>
+                        <div id="workflow-nouvelle-parcelle" style="display: none; margin-top: 10px; padding: 12px; background: var(--light-bg); border-radius: 10px;">
+                            <div class="form-group">
+                                <label class="form-label">Nom de la parcelle</label>
+                                <input type="text" id="workflow-parcelle-nom" class="form-input" placeholder="Ex: Syrah coteau">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Cépage</label>
+                                <input type="text" id="workflow-parcelle-cepage" class="form-input" placeholder="Ex: Syrah">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Surface (ha)</label>
+                                <input type="number" id="workflow-parcelle-surface" class="form-input" step="0.01" placeholder="Ex: 1.20">
+                            </div>
+                            <button type="button" class="btn-submit" onclick="ajouterParcelleDepuisWorkflow()">✓ Ajouter et cocher</button>
+                        </div>
 
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px;">
                             <button class="btn-submit" style="background: white; color: var(--text-light); border: 1.5px solid var(--border);" onclick="retourEtape1()">← Retour</button>
@@ -638,15 +657,22 @@
                 <div class="form-card">
                     <h3 style="margin-bottom: 4px;">🧴 Mes produits</h3>
                     <p style="font-size: 12px; color: var(--text-light); margin-bottom: 14px;">Les doses saisies ici sont juste tes réglages perso — vérifie toujours l'autorisation et la dose homologuée sur E-Phy.</p>
-                    <div id="reglages-produits-list"></div>
+                    <input type="text" id="reglages-produits-recherche" class="form-input" placeholder="🔍 Rechercher un produit..." style="margin-bottom: 10px;" oninput="filtrerReglagesProduits(this.value)">
+                    <div id="reglages-produits-list" style="max-height: 400px; overflow-y: auto;"></div>
                     <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
                         <div class="form-group">
                             <label class="form-label">Nom du produit</label>
                             <input type="text" id="reg-produit-nom" class="form-input" placeholder="Ex: Cuivre bio 20%">
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Dose par défaut (L/ha)</label>
-                            <input type="number" id="reg-produit-dose" class="form-input" step="0.1" placeholder="Ex: 2.0">
+                            <label class="form-label">Dose par défaut</label>
+                            <div style="display: flex; gap: 8px;">
+                                <input type="number" id="reg-produit-dose" class="form-input" step="0.01" placeholder="Ex: 2.0" style="flex: 1;">
+                                <select id="reg-produit-unite" class="form-select" style="width: 100px;">
+                                    <option value="L/ha">L/ha</option>
+                                    <option value="kg/ha">kg/ha</option>
+                                </select>
+                            </div>
                         </div>
                         <button class="btn-submit" onclick="ajouterProduit()">+ Ajouter le produit</button>
                         <a href="https://ephy.anses.fr/" target="_blank" rel="noopener" style="display: block; text-align: center; margin-top: 10px; font-size: 12px; color: var(--primary); font-weight: 600;">🔍 Vérifier la dose et les usages sur E-Phy (Anses) ↗</a>
@@ -932,12 +958,20 @@
             }
         }
 
+        // Convertit un azimut en degrés (0-360) en point cardinal (8 points)
+        function degresVersPoint(deg) {
+            if (deg === undefined || deg === null || isNaN(deg)) return '';
+            const points = ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'];
+            const idx = Math.round((((deg % 360) + 360) % 360) / 45) % 8;
+            return points[idx];
+        }
+
         // Météo actuelle, pour la carte d'accueil
         async function chargerMeteoActuelle() {
             if (!currentExploitation || !currentExploitation.latitude || !currentExploitation.longitude) return;
             try {
                 const { latitude, longitude } = currentExploitation;
-                const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,precipitation,wind_speed_10m,wind_gusts_10m&timezone=auto`;
+                const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,precipitation,wind_speed_10m,wind_gusts_10m,wind_direction_10m,surface_pressure&timezone=auto`;
                 const resp = await fetch(url);
                 if (!resp.ok) throw new Error('Réponse météo invalide');
                 const data = await resp.json();
@@ -951,11 +985,11 @@
                         </div>
                         <div class="stat-card">
                             <div class="stat-value" style="font-size: 22px;">${Math.round(c.wind_speed_10m)} <span style="font-size:12px;">km/h</span></div>
-                            <div class="stat-label">💨 Vent (rafales ${Math.round(c.wind_gusts_10m)})</div>
+                            <div class="stat-label">💨 Vent ${degresVersPoint(c.wind_direction_10m)} (rafales ${Math.round(c.wind_gusts_10m)})</div>
                         </div>
                     </div>
                     <div style="font-size: 12px; color: var(--text-light); text-align: center; margin-top: 10px;">
-                        🌧️ ${c.precipitation} mm de pluie actuellement · ${currentExploitation.region || ''}
+                        🌧️ ${c.precipitation} mm de pluie · ${Math.round(c.surface_pressure)} hPa · ${currentExploitation.region || ''}
                     </div>
                 `;
                 document.getElementById('carte-meteo-accueil').style.display = 'block';
@@ -971,7 +1005,7 @@
             if (!currentExploitation || !currentExploitation.latitude || !currentExploitation.longitude) return null;
             try {
                 const { latitude, longitude } = currentExploitation;
-                const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&hourly=temperature_2m,precipitation,wind_speed_10m,wind_gusts_10m&timezone=auto&past_days=2&forecast_days=1`;
+                const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&hourly=temperature_2m,precipitation,wind_speed_10m,wind_gusts_10m,wind_direction_10m,surface_pressure&timezone=auto&past_days=2&forecast_days=1`;
                 const resp = await avecDelai(fetch(url), 8000, null);
                 if (!resp || !resp.ok) throw new Error('Réponse météo invalide ou trop lente');
                 const data = await avecDelai(resp.json(), 8000, null);
@@ -989,6 +1023,8 @@
                             temperature: data.hourly.temperature_2m[i],
                             vent: data.hourly.wind_speed_10m[i],
                             rafale: data.hourly.wind_gusts_10m[i],
+                            direction: data.hourly.wind_direction_10m[i],
+                            pression: data.hourly.surface_pressure[i],
                             pluie: data.hourly.precipitation[i]
                         });
                     }
@@ -997,11 +1033,18 @@
                 if (heuresRetenues.length === 0) return null;
 
                 const moyenne = (arr) => arr.reduce((s, v) => s + v, 0) / arr.length;
+                const arrondi = (v) => Math.round(v * 10) / 10;
+                const pointDebut = degresVersPoint(heuresRetenues[0].direction);
+                const pointFin = degresVersPoint(heuresRetenues[heuresRetenues.length - 1].direction);
                 return {
-                    temperature_moyenne: Math.round(moyenne(heuresRetenues.map(h => h.temperature)) * 10) / 10,
-                    vent_moyen: Math.round(moyenne(heuresRetenues.map(h => h.vent)) * 10) / 10,
-                    rafale_max: Math.round(Math.max(...heuresRetenues.map(h => h.rafale)) * 10) / 10,
-                    pluie_totale: Math.round(heuresRetenues.reduce((s, h) => s + h.pluie, 0) * 10) / 10,
+                    temperature_min: arrondi(Math.min(...heuresRetenues.map(h => h.temperature))),
+                    temperature_max: arrondi(Math.max(...heuresRetenues.map(h => h.temperature))),
+                    vent_moyen: arrondi(moyenne(heuresRetenues.map(h => h.vent))),
+                    rafale_max: arrondi(Math.max(...heuresRetenues.map(h => h.rafale))),
+                    vent_direction: pointDebut === pointFin ? pointDebut : `${pointDebut} → ${pointFin}`,
+                    pression_min: Math.round(Math.min(...heuresRetenues.map(h => h.pression))),
+                    pression_max: Math.round(Math.max(...heuresRetenues.map(h => h.pression))),
+                    pluie_totale: arrondi(heuresRetenues.reduce((s, h) => s + h.pluie, 0)),
                     detail_heures: heuresRetenues,
                     source: 'Open-Meteo'
                 };
@@ -1019,10 +1062,20 @@
                     : 'Météo indisponible pour cette période (service momentanément injoignable).';
                 return `<div style="font-size: 12px; color: var(--text-light);">${raison}</div>`;
             }
+            // Compatibilité avec les comptes rendus enregistrés avant l'ajout des fourchettes
+            // (ils n'ont qu'une température moyenne, pas de min/max, ni de vent/pression).
+            const temperature = (meteo.temperature_min !== undefined)
+                ? `${meteo.temperature_min}°C à ${meteo.temperature_max}°C`
+                : `${meteo.temperature_moyenne}°C (moyenne)`;
+            const direction = meteo.vent_direction ? ` ${meteo.vent_direction}` : '';
+            const pression = (meteo.pression_min !== undefined)
+                ? `<br>📊 Pression : <strong>${meteo.pression_min} à ${meteo.pression_max} hPa</strong>`
+                : '';
             return `
                 <div style="font-size: 13px;">
-                    💨 Vent moyen : <strong>${meteo.vent_moyen} km/h</strong> (rafales max <strong>${meteo.rafale_max} km/h</strong>)<br>
-                    🌡️ Température moyenne : <strong>${meteo.temperature_moyenne}°C</strong><br>
+                    💨 Vent moyen : <strong>${meteo.vent_moyen} km/h${direction}</strong> (rafales max <strong>${meteo.rafale_max} km/h</strong>)<br>
+                    🌡️ Température : <strong>${temperature}</strong>
+                    ${pression}<br>
                     🌧️ Pluie cumulée : <strong>${meteo.pluie_totale} mm</strong>
                 </div>
             `;
@@ -1222,48 +1275,78 @@
             }
         }
 
-        async function ajouterParcelle() {
+        // Valide et insère une parcelle en base. Retourne true si la parcelle a bien été créée.
+        // Utilisée à la fois depuis Réglages et depuis l'étape 2 du traitement (pour ne jamais
+        // avoir à quitter un traitement en cours juste pour ajouter une parcelle oubliée).
+        async function creerParcelleEnBase(nom, cepage, surfaceRaw) {
             if (!currentExploitation) {
                 alert('Ton exploitation n\'est pas encore chargée. Recharge la page (Cmd+R) et réessaie.');
-                return;
+                return false;
             }
-            const nom = document.getElementById('reg-parcelle-nom').value.trim();
-            const cepage = document.getElementById('reg-parcelle-cepage').value.trim();
-            const surfaceRaw = document.getElementById('reg-parcelle-surface').value;
-
             if (!nom) {
                 alert('Le nom de la parcelle est obligatoire');
-                document.getElementById('reg-parcelle-nom').focus();
-                return;
+                return false;
             }
             const surfaceVal = parseFloat(surfaceRaw);
             if (!surfaceRaw || isNaN(surfaceVal) || surfaceVal <= 0) {
                 alert('La surface doit être un nombre supérieur à 0');
-                document.getElementById('reg-parcelle-surface').focus();
-                return;
+                return false;
             }
-
             try {
                 const { error } = await supabaseClient
                     .from('parcelles')
                     .insert([{
                         nom,
                         cepage: cepage || null,
-                        surface: parseFloat(surfaceRaw),
+                        surface: surfaceVal,
                         exploitation_id: currentExploitation.id
                     }]);
-
                 if (error) throw error;
-
-                document.getElementById('reg-parcelle-nom').value = '';
-                document.getElementById('reg-parcelle-cepage').value = '';
-                document.getElementById('reg-parcelle-surface').value = '';
-
                 await chargerParcelles();
-                afficherReglages();
+                return true;
             } catch (err) {
                 console.error('Erreur ajout parcelle:', err);
                 alert('Erreur: ' + messageErreur(err));
+                return false;
+            }
+        }
+
+        async function ajouterParcelle() {
+            const nom = document.getElementById('reg-parcelle-nom').value.trim();
+            const cepage = document.getElementById('reg-parcelle-cepage').value.trim();
+            const surfaceRaw = document.getElementById('reg-parcelle-surface').value;
+
+            if (await creerParcelleEnBase(nom, cepage, surfaceRaw)) {
+                document.getElementById('reg-parcelle-nom').value = '';
+                document.getElementById('reg-parcelle-cepage').value = '';
+                document.getElementById('reg-parcelle-surface').value = '';
+                afficherReglages();
+            }
+        }
+
+        function basculerFormulaireNouvelleParcelle() {
+            const panneau = document.getElementById('workflow-nouvelle-parcelle');
+            const ouvrir = panneau.style.display === 'none';
+            panneau.style.display = ouvrir ? 'block' : 'none';
+            if (ouvrir) document.getElementById('workflow-parcelle-nom').focus();
+        }
+
+        async function ajouterParcelleDepuisWorkflow() {
+            const nom = document.getElementById('workflow-parcelle-nom').value.trim();
+            const cepage = document.getElementById('workflow-parcelle-cepage').value.trim();
+            const surfaceRaw = document.getElementById('workflow-parcelle-surface').value;
+
+            if (await creerParcelleEnBase(nom, cepage, surfaceRaw)) {
+                document.getElementById('workflow-parcelle-nom').value = '';
+                document.getElementById('workflow-parcelle-cepage').value = '';
+                document.getElementById('workflow-parcelle-surface').value = '';
+                document.getElementById('workflow-nouvelle-parcelle').style.display = 'none';
+
+                afficherEtape2(); // redessine la liste, coches déjà cochées conservées
+
+                // On coche directement la parcelle qu'on vient de créer, et on enregistre son heure
+                const chk = Array.from(document.querySelectorAll('#workflow-parcelles input[type="checkbox"]')).find(cb => cb.dataset.parcelle === nom);
+                if (chk) { chk.checked = true; majProgression(); }
             }
         }
 
@@ -1299,11 +1382,12 @@
                     id: p.id,
                     nom: p.nom,
                     dose: p.dose_defaut,
+                    unite: p.unite || 'L/ha',
                     exploitation_id: p.exploitation_id
                 }));
             } catch (err) {
-                // Compatibilité: si la colonne exploitation_id n'existe pas encore côté Supabase,
-                // on retombe sur la liste complète sans filtre pour ne pas casser l'app.
+                // Compatibilité: si la colonne exploitation_id (ou unite) n'existe pas encore côté
+                // Supabase, on retombe sur la liste complète sans filtre pour ne pas casser l'app.
                 console.error('Erreur produits (fallback sans filtre):', err);
                 try {
                     let { data } = await supabaseClient.from('produits').select('*').order('nom');
@@ -1311,6 +1395,7 @@
                         id: p.id,
                         nom: p.nom,
                         dose: p.dose_defaut,
+                        unite: p.unite || 'L/ha',
                         exploitation_id: p.exploitation_id ?? null
                     }));
                 } catch (err2) {
@@ -1327,6 +1412,7 @@
             }
             const nom = document.getElementById('reg-produit-nom').value.trim();
             const doseRaw = document.getElementById('reg-produit-dose').value;
+            const unite = document.getElementById('reg-produit-unite').value === 'kg/ha' ? 'kg/ha' : 'L/ha';
 
             if (!nom) {
                 alert('Le nom du produit est obligatoire');
@@ -1346,6 +1432,7 @@
                     .insert([{
                         nom,
                         dose_defaut: parseFloat(doseRaw),
+                        unite,
                         exploitation_id: currentExploitation.id
                     }]);
 
@@ -1403,6 +1490,16 @@
             return new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
         }
 
+        // Convertit une durée en minutes en texte lisible : 329 -> "5h et 29min", 45 -> "45 min"
+        function formaterDuree(minutesTotal) {
+            const m = Math.max(0, Math.round(minutesTotal));
+            const h = Math.floor(m / 60);
+            const reste = m % 60;
+            if (h === 0) return `${reste} min`;
+            if (reste === 0) return `${h}h`;
+            return `${h}h et ${reste}min`;
+        }
+
         // Affiche un nombre sans zéros inutiles : 0.05 reste 0.05, 1.50 devient 1.5
         function formaterNombre(n, decimales) {
             const f = Math.pow(10, decimales === undefined ? 2 : decimales);
@@ -1451,6 +1548,7 @@
                 dateISO: w.dateISO || null,
                 totalSurf: w.totalSurf === undefined ? null : w.totalSurf,
                 meteo: w.meteo || null,
+                note: w.note || '',
                 clientId: w.clientId || null
             };
         }
@@ -1471,6 +1569,7 @@
                 dateISO: b.dateISO || undefined,
                 totalSurf: b.totalSurf === null ? undefined : b.totalSurf,
                 meteo: b.meteo || null,
+                note: b.note || '',
                 clientId: b.clientId || undefined
             };
         }
@@ -1624,23 +1723,33 @@
             }
         }
 
+        // Enlève les accents et met en minuscules, pour une recherche insensible aux accents
+        function normaliserRecherche(s) {
+            return (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        }
+
         function afficherProduits() {
             const cont = document.getElementById('workflow-produits');
+            const recherche = document.getElementById('workflow-produits-recherche');
+            if (recherche) recherche.value = '';
             cont.innerHTML = '';
 
             if (produits.length === 0) {
                 cont.innerHTML = `<p class="empty-note">Aucun produit configuré. Ajoute tes produits dans l'onglet 🔧 Réglages.</p>`;
+                document.getElementById('workflow-produits-compte').textContent = '';
                 return;
             }
 
             produits.forEach(prod => {
                 const label = document.createElement('label');
                 label.className = 'checkbox-item';
+                label.dataset.recherche = normaliserRecherche(prod.nom + ' ' + (prod.categorie || ''));
 
                 const chk = document.createElement('input');
                 chk.type = 'checkbox';
                 chk.dataset.produit = prod.nom;
                 chk.dataset.dose = prod.dose;
+                chk.dataset.unite = prod.unite || 'L/ha';
                 chk.onchange = calculerWorkflow;
 
                 const div = document.createElement('div');
@@ -1650,7 +1759,7 @@
                 nom.textContent = prod.nom;
                 const detail = document.createElement('div');
                 detail.style.cssText = 'font-size: 11px; color: var(--text-light);';
-                detail.textContent = `${prod.dose} L/ha (défaut)`;
+                detail.textContent = `${prod.dose} ${prod.unite || 'L/ha'} (défaut)`;
                 div.appendChild(nom);
                 div.appendChild(detail);
 
@@ -1658,6 +1767,29 @@
                 label.appendChild(div);
                 cont.appendChild(label);
             });
+
+            document.getElementById('workflow-produits-compte').textContent = `${produits.length} produit${produits.length > 1 ? 's' : ''}`;
+        }
+
+        // Filtre en direct la liste des produits affichés (recherche par nom ou catégorie).
+        // Ne masque jamais un produit déjà coché, pour ne pas perdre une sélection en cours.
+        function filtrerProduits(texte) {
+            const requete = normaliserRecherche(texte.trim());
+            const lignes = Array.from(document.querySelectorAll('#workflow-produits .checkbox-item'));
+            let visibles = 0;
+            lignes.forEach(label => {
+                const chk = label.querySelector('input[type="checkbox"]');
+                const correspond = !requete || (label.dataset.recherche || '').includes(requete);
+                const visible = correspond || (chk && chk.checked);
+                label.style.display = visible ? 'flex' : 'none';
+                if (visible) visibles++;
+            });
+            const compte = document.getElementById('workflow-produits-compte');
+            if (compte) {
+                compte.textContent = requete
+                    ? `${visibles} résultat${visibles > 1 ? 's' : ''}`
+                    : `${lignes.length} produit${lignes.length > 1 ? 's' : ''}`;
+            }
         }
 
         // Coche les produits déjà choisis (retour depuis l'étape 2, reprise d'un brouillon)
@@ -1667,9 +1799,19 @@
             });
         }
 
+        // Lit la valeur numérique d'une entrée de dose, qu'elle soit au nouveau format
+        // { valeur, unite } ou à l'ancien format (un simple nombre, pour les brouillons
+        // et traitements enregistrés avant l'ajout des kg/ha).
+        function doseValeur(entree) {
+            return (entree && typeof entree === 'object') ? entree.valeur : entree;
+        }
+        function doseUnite(entree) {
+            return (entree && typeof entree === 'object' && entree.unite) ? entree.unite : 'L/ha';
+        }
+
         // Appelée quand on coche/décoche un produit, ou qu'on change le volume / la surface.
         // Les doses déjà ajustées à la main sont conservées ; un produit nouvellement coché
-        // prend sa dose par défaut.
+        // prend sa dose par défaut (avec l'unité du produit : L/ha ou kg/ha).
         function calculerWorkflow() {
             if (!workflowEnCours) return;
             afficherDensite();
@@ -1681,10 +1823,11 @@
             const doses = {};
             document.querySelectorAll('#workflow-produits input[type="checkbox"]:checked').forEach(chk => {
                 const nom = chk.dataset.produit;
-                const dejaAjustee = workflowEnCours.doses[nom];
-                doses[nom] = (typeof dejaAjustee === 'number' && isFinite(dejaAjustee))
+                const dejaAjustee = doseValeur(workflowEnCours.doses[nom]);
+                const valeur = (typeof dejaAjustee === 'number' && isFinite(dejaAjustee))
                     ? dejaAjustee
                     : parseFloat(chk.dataset.dose);
+                doses[nom] = { valeur, unite: chk.dataset.unite || 'L/ha' };
             });
 
             workflowEnCours.volume = volume;
@@ -1695,12 +1838,13 @@
             sauvegarderBrouillon();
         }
 
-        // Modifie la dose d'un produit (L/ha). Retourne false si la valeur est refusée.
+        // Modifie la dose d'un produit (dans son unité propre, L/ha ou kg/ha). Retourne false
+        // si la valeur est refusée.
         function changerDose(nom, valeurBrute) {
             const valeur = parseFloat(valeurBrute);
             if (!workflowEnCours || !Object.prototype.hasOwnProperty.call(workflowEnCours.doses, nom)) return false;
             if (!isFinite(valeur) || valeur <= 0) return false;
-            workflowEnCours.doses[nom] = valeur;
+            workflowEnCours.doses[nom] = { valeur, unite: doseUnite(workflowEnCours.doses[nom]) };
             afficherQuantites();
             sauvegarderBrouillon();
             return true;
@@ -1708,7 +1852,11 @@
 
         function afficherQuantites() {
             const lignes = Object.entries(workflowEnCours.doses)
-                .map(([nom, dose]) => `<div style="margin-top: 4px;">${echapperHtml(nom)} : ${formaterNombre(dose * workflowEnCours.surface, 2)} L</div>`)
+                .map(([nom, entree]) => {
+                    const unite = doseUnite(entree);
+                    const quantiteUnite = unite === 'kg/ha' ? 'kg' : 'L';
+                    return `<div style="margin-top: 4px;">${echapperHtml(nom)} : ${formaterNombre(doseValeur(entree) * workflowEnCours.surface, 2)} ${quantiteUnite}</div>`;
+                })
                 .join('');
             document.getElementById('workflow-resultats').innerHTML = `
                 <div class="info-box warning">
@@ -1737,16 +1885,16 @@
 
                 const etiquette = document.createElement('label');
                 etiquette.style.fontSize = '12px';
-                etiquette.textContent = nom;
+                etiquette.textContent = `${nom} (${doseUnite(workflowEnCours.doses[nom])})`;
 
                 const champ = document.createElement('input');
                 champ.type = 'number';
                 champ.step = '0.01';
                 champ.min = '0';
-                champ.value = workflowEnCours.doses[nom];
+                champ.value = doseValeur(workflowEnCours.doses[nom]);
                 champ.style.cssText = 'width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;';
                 champ.addEventListener('change', () => {
-                    if (!changerDose(nom, champ.value)) champ.value = workflowEnCours.doses[nom];
+                    if (!changerDose(nom, champ.value)) champ.value = doseValeur(workflowEnCours.doses[nom]);
                 });
 
                 groupe.appendChild(etiquette);
@@ -1937,20 +2085,24 @@
             sauvegarderBrouillon();
 
             const parcHtml = w.parcelles.map(p => `${echapperHtml(p.nom)} (${p.time})`).join('<br>');
-            const prodHtml = Object.entries(w.doses).map(([p, d]) => `${echapperHtml(p)}: ${formaterNombre(d, 3)} L/ha`).join('<br>');
+            const prodHtml = Object.entries(w.doses).map(([p, entree]) => `${echapperHtml(p)}: ${formaterNombre(doseValeur(entree), 3)} ${doseUnite(entree)}`).join('<br>');
 
             document.getElementById('workflow-recap').innerHTML = `
                 <div class="item-card" style="margin-bottom: 12px;">
                     <strong>📅 Date</strong><div style="font-size: 13px; margin-top: 4px;">${w.debutTime.toLocaleDateString('fr-FR')}</div>
                 </div>
                 <div class="item-card" style="margin-bottom: 12px;">
-                    <strong>⏱️ Durée</strong><div style="font-size: 13px; margin-top: 4px;">${w.heureDebut} → ${w.heureFin} (${w.duree} min)</div>
+                    <strong>⏱️ Durée</strong><div style="font-size: 13px; margin-top: 4px;">${w.heureDebut} → ${w.heureFin} (${formaterDuree(w.duree)})</div>
                 </div>
                 <div class="item-card" style="margin-bottom: 12px;">
                     <strong>📍 Parcelles traitées (${w.totalSurf.toFixed(2)} ha)</strong><div style="font-size: 12px; margin-top: 6px; color: var(--text-light);">${parcHtml}</div>
                 </div>
                 <div class="item-card" style="margin-bottom: 12px;">
                     <strong>🧴 Produits</strong><div style="font-size: 12px; margin-top: 6px; color: var(--text-light);">${prodHtml}</div>
+                </div>
+                <div class="item-card" style="margin-bottom: 12px;">
+                    <strong>📝 Note (optionnel)</strong>
+                    <textarea id="workflow-note" class="form-input" rows="2" placeholder="Vent excessif, panne, remarque..." style="margin-top: 6px; resize: vertical;" oninput="workflowEnCours.note = this.value; sauvegarderBrouillon();">${echapperHtml(w.note || '')}</textarea>
                 </div>
                 <div class="item-card" id="carte-meteo-recap" style="margin-bottom: 12px;">
                     <strong>🌦️ Météo pendant la pulvérisation</strong>
@@ -2120,6 +2272,7 @@
                     surface_traitee: w.totalSurf,
                     volume_prepare: w.volume,
                     meteo: w.meteo || null,
+                    notes: (w.note || '').trim() || null,
                     created_by: currentUser.id,
                     debut_iso: w.debutTime.toISOString(),
                     fin_iso: w.finTime.toISOString()
@@ -2236,7 +2389,7 @@
                             <button class="btn-icon-delete" title="Télécharger le PDF" style="color: var(--primary);" onclick="genererPDFTraitementEnAttente(${i})">📄</button>
                         </div>
                         <div style="font-size: 12px; color: var(--text-light);">
-                            ⏱️ ${t.heure_debut} → ${t.heure_fin} <span style="opacity: 0.6;">(${t.duree_minutes} min)</span> · en attente d'envoi
+                            ⏱️ ${t.heure_debut} → ${t.heure_fin} <span style="opacity: 0.6;">(${formaterDuree(t.duree_minutes)})</span> · en attente d'envoi
                         </div>
                     </div>
                 `).join('');
@@ -2255,12 +2408,13 @@
                         <button class="btn-icon-delete" title="Télécharger le PDF" style="color: var(--primary);" onclick="genererPDFTraitement(traitements[${i}])">📄</button>
                     </div>
                     <div style="font-size: 12px; color: var(--text-light);">
-                        ⏱️ ${t.heure_debut} → ${t.heure_fin} <span style="opacity: 0.6;">(${t.duree_minutes} min)</span>
+                        ⏱️ ${t.heure_debut} → ${t.heure_fin} <span style="opacity: 0.6;">(${formaterDuree(t.duree_minutes)})</span>
                     </div>
                     <div style="font-size: 13px; margin-top: 6px;">
                         <strong>${t.parcelles.length}</strong> parcelle${t.parcelles.length > 1 ? 's' : ''} · <strong>${t.surface_traitee.toFixed(2)} ha</strong>
                     </div>
-                    ${t.meteo ? `<div style="font-size: 11px; color: var(--text-light); margin-top: 6px;">💨 ${t.meteo.vent_moyen} km/h (rafales ${t.meteo.rafale_max}) · 🌧️ ${t.meteo.pluie_totale} mm</div>` : ''}
+                    ${t.meteo ? `<div style="font-size: 11px; color: var(--text-light); margin-top: 6px;">💨 ${t.meteo.vent_moyen} km/h${t.meteo.vent_direction ? ' ' + t.meteo.vent_direction : ''} (rafales ${t.meteo.rafale_max}) · 🌧️ ${t.meteo.pluie_totale} mm</div>` : ''}
+                    ${t.notes ? `<div style="font-size: 12px; margin-top: 6px; font-style: italic;">📝 ${echapperHtml(t.notes)}</div>` : ''}
                 </div>
             `).join('');
             list.innerHTML = html;
@@ -2302,15 +2456,25 @@
                 prodCont.innerHTML = '<p class="empty-note">Aucun produit pour l\'instant.</p>';
             } else {
                 prodCont.innerHTML = produits.map(p => `
-                    <div class="item-card item-row">
+                    <div class="item-card item-row" data-recherche="${normaliserRecherche(p.nom + ' ' + (p.categorie || ''))}">
                         <div>
                             <strong style="font-size: 13px;">${p.nom}</strong>
-                            <div style="font-size: 11px; color: var(--text-light); margin-top: 2px;">${p.dose} L/ha${p.exploitation_id ? '' : ' · partagé'}</div>
+                            <div style="font-size: 11px; color: var(--text-light); margin-top: 2px;">${p.dose} ${p.unite || 'L/ha'}${p.exploitation_id ? '' : ' · partagé'}</div>
                         </div>
                         ${p.exploitation_id ? `<button class="btn-icon-delete" title="Supprimer" onclick="supprimerProduit('${p.id}', '${p.nom.replace(/'/g, "\\'")}')">✕</button>` : ''}
                     </div>
                 `).join('');
             }
+            const rechercheInput = document.getElementById('reglages-produits-recherche');
+            if (rechercheInput) filtrerReglagesProduits(rechercheInput.value);
+        }
+
+        // Filtre en direct la liste de gestion des produits (Réglages)
+        function filtrerReglagesProduits(texte) {
+            const requete = normaliserRecherche(texte.trim());
+            document.querySelectorAll('#reglages-produits-list .item-card').forEach(carte => {
+                carte.style.display = (!requete || (carte.dataset.recherche || '').includes(requete)) ? 'flex' : 'none';
+            });
         }
 
         // ===== GÉNÉRATION PDF (jsPDF — 100% côté navigateur, aucun serveur) =====
@@ -2354,7 +2518,7 @@
                 sousTitre('Date et horaires');
                 ligne(`Date : ${new Date(t.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}`, 11, false);
                 y += 6;
-                ligne(`Début : ${t.heure_debut}   →   Fin : ${t.heure_fin}   (durée : ${t.duree_minutes} min)`, 11, false);
+                ligne(`Début : ${t.heure_debut}   →   Fin : ${t.heure_fin}   (durée : ${formaterDuree(t.duree_minutes)})`, 11, false);
 
                 sousTitre(`Parcelles traitées (${Number(t.surface_traitee).toFixed(2)} ha au total)`);
                 (t.parcelles || []).forEach(p => {
@@ -2363,18 +2527,36 @@
                 });
 
                 sousTitre('Produits appliqués');
-                Object.entries(t.produits || {}).forEach(([nom, dose]) => {
-                    ligne(`• ${nom} : ${formaterNombre(dose, 3)} L/ha`, 10, false);
+                Object.entries(t.produits || {}).forEach(([nom, entree]) => {
+                    ligne(`• ${nom} : ${formaterNombre(doseValeur(entree), 3)} ${doseUnite(entree)}`, 10, false);
                     y += 5.5;
                 });
 
+                if (t.notes) {
+                    sousTitre('Note');
+                    const largeurTexte = largeurUtile;
+                    doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
+                    const lignesNote = doc.splitTextToSize(t.notes, largeurTexte);
+                    doc.text(lignesNote, marge, y);
+                    y += lignesNote.length * 5;
+                }
+
                 sousTitre('Bulletin météo pendant la pulvérisation');
                 if (t.meteo) {
-                    ligne(`Vent moyen : ${t.meteo.vent_moyen} km/h  (rafales max : ${t.meteo.rafale_max} km/h)`, 10, false);
+                    const m = t.meteo;
+                    const direction = m.vent_direction ? `  (${m.vent_direction})` : '';
+                    ligne(`Vent moyen : ${m.vent_moyen} km/h${direction}  —  rafales max : ${m.rafale_max} km/h`, 10, false);
                     y += 5.5;
-                    ligne(`Température moyenne : ${t.meteo.temperature_moyenne}°C`, 10, false);
+                    const temperature = (m.temperature_min !== undefined)
+                        ? `${m.temperature_min}°C à ${m.temperature_max}°C`
+                        : `${m.temperature_moyenne}°C (moyenne)`;
+                    ligne(`Température : ${temperature}`, 10, false);
                     y += 5.5;
-                    ligne(`Pluie cumulée : ${t.meteo.pluie_totale} mm`, 10, false);
+                    if (m.pression_min !== undefined) {
+                        ligne(`Pression atmosphérique : ${m.pression_min} à ${m.pression_max} hPa`, 10, false);
+                        y += 5.5;
+                    }
+                    ligne(`Pluie cumulée : ${m.pluie_totale} mm`, 10, false);
                     y += 5.5;
                     ligne('Source : Open-Meteo', 8, false, [150, 150, 150]);
                 } else {
