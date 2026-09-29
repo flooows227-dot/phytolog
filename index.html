@@ -483,6 +483,8 @@
         <div class="main-content">
             <!-- MENU PRINCIPAL -->
             <section id="menu" class="section active">
+                <div class="form-card" id="carte-brouillon" style="display: none;"></div>
+                <div class="form-card" id="bandeau-attente" style="display: none; border-left: 4px solid var(--accent);"></div>
                 <div class="form-card" id="carte-meteo-accueil" style="display: none;">
                     <h3 style="font-size: 14px; margin-bottom: 12px;">🌦️ Météo actuelle</h3>
                     <div id="meteo-actuelle-contenu"></div>
@@ -502,6 +504,7 @@
 
             <!-- WORKFLOW DIRIGÉ -->
             <section id="workflow" class="section">
+                <div class="form-card" id="workflow-vide" style="display: none;"></div>
                 <!-- ÉTAPE 1 : PRÉPARATION -->
                 <div id="step1" style="display: none;">
                     <div class="form-card">
@@ -682,6 +685,38 @@
         let traitements = [];
         let workflowEnCours = null;
         let positionGPSSetup = null; // position obtenue par "Me localiser" pendant la création de l'exploitation
+        let horlogeIntervalle = null; // minuteur affiché à l'étape 2
+        let envoiFilePromesse = null; // envoi de la file d'attente en cours (évite deux envois en parallèle)
+        let dernierEtatEnvoi = null;  // { reseau, message } du dernier échec d'envoi
+        let dernierRapport = null;    // dernier compte rendu validé (sert au bouton PDF de la confirmation)
+
+        // ===== STOCKAGE LOCAL (brouillon + comptes rendus en attente) =====
+        // Tout passe par cet objet. Le jour où PhytoLog sera une application des magasins, on
+        // remplacera uniquement son contenu par le stockage natif du téléphone.
+        const CLE_BROUILLON = 'phytolog_brouillon_v1';
+        const CLE_FILE_ATTENTE = 'phytolog_file_attente_v1';
+        const Stockage = {
+            lire(cle, parDefaut) {
+                try {
+                    const v = localStorage.getItem(cle);
+                    return v === null ? parDefaut : JSON.parse(v);
+                } catch (err) {
+                    return parDefaut;
+                }
+            },
+            ecrire(cle, valeur) {
+                try {
+                    localStorage.setItem(cle, JSON.stringify(valeur));
+                    return true;
+                } catch (err) {
+                    console.warn('Stockage local indisponible:', err);
+                    return false;
+                }
+            },
+            supprimer(cle) {
+                try { localStorage.removeItem(cle); } catch (err) { /* rien à faire */ }
+            }
+        };
 
         // Note: les produits et parcelles sont désormais gérés par exploitation
         // via l'onglet Réglages, plus de liste figée imposée à tous les comptes.
@@ -735,6 +770,9 @@
                 afficherMenu();
                 afficherHisto();
                 afficherReglages();
+                afficherBrouillonAccueil();
+                afficherFileAttente();
+                envoyerFileAttente();
             } catch (err) {
                 console.error('Erreur initialisation:', err);
                 document.getElementById('loading-page').innerHTML = `
@@ -934,9 +972,10 @@
             try {
                 const { latitude, longitude } = currentExploitation;
                 const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&hourly=temperature_2m,precipitation,wind_speed_10m,wind_gusts_10m&timezone=auto&past_days=2&forecast_days=1`;
-                const resp = await fetch(url);
-                if (!resp.ok) throw new Error('Réponse météo invalide');
-                const data = await resp.json();
+                const resp = await avecDelai(fetch(url), 8000, null);
+                if (!resp || !resp.ok) throw new Error('Réponse météo invalide ou trop lente');
+                const data = await avecDelai(resp.json(), 8000, null);
+                if (!data) throw new Error('Réponse météo trop lente');
 
                 // Chaque valeur horaire couvre [heure, heure + 1h]. On garde toutes les heures qui
                 // chevauchent la plage de pulvérisation [debut, fin] — y compris à cheval sur minuit.
@@ -1358,20 +1397,208 @@
             }
         }
 
-        // ===== 3. WORKFLOW =====
+        // ===== 3. TRAITEMENT EN COURS : BROUILLON, ÉTAPES, ENVOI =====
+
+        function heureActuelle() {
+            return new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        // Affiche un nombre sans zéros inutiles : 0.05 reste 0.05, 1.50 devient 1.5
+        function formaterNombre(n, decimales) {
+            const f = Math.pow(10, decimales === undefined ? 2 : decimales);
+            return String(Math.round(Number(n) * f) / f);
+        }
+
+        // Protège un texte saisi par l'utilisateur avant de l'insérer dans du HTML
+        function echapperHtml(s) {
+            return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        // Identifiant unique généré sur l'appareil : il sert à ne jamais enregistrer deux fois le même
+        // compte rendu, même si l'envoi est réessayé plusieurs fois.
+        function genererUUID() {
+            if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+                const r = Math.floor(Math.random() * 16);
+                return (c === 'x' ? r : (r % 4) + 8).toString(16);
+            });
+        }
+
+        // Attend une promesse, mais au plus `ms` millisecondes (réseau bloqué en pleine vigne)
+        function avecDelai(promesse, ms, valeurSiDelai) {
+            let minuteur;
+            const delai = new Promise((resolve) => { minuteur = setTimeout(() => resolve(valeurSiDelai), ms); });
+            return Promise.race([promesse, delai]).finally(() => clearTimeout(minuteur));
+        }
+
+        // ---------- Brouillon du traitement en cours ----------
+
+        function serialiserWorkflow(w) {
+            return {
+                v: 1,
+                exploitation_id: currentExploitation.id,
+                sauvegarde_le: new Date().toISOString(),
+                etape: w.etape,
+                volume: w.volume,
+                surface: w.surface,
+                doses: w.doses,
+                parcelles: w.parcelles,
+                debut_iso: w.debutTime.toISOString(),
+                heureDebut: w.heureDebut,
+                fin_iso: w.finTime ? w.finTime.toISOString() : null,
+                heureFin: w.heureFin || null,
+                duree: w.duree === undefined ? null : w.duree,
+                dateISO: w.dateISO || null,
+                totalSurf: w.totalSurf === undefined ? null : w.totalSurf,
+                meteo: w.meteo || null,
+                clientId: w.clientId || null
+            };
+        }
+
+        function deserialiserWorkflow(b) {
+            return {
+                etape: b.etape,
+                volume: b.volume,
+                surface: b.surface,
+                produits: {},
+                doses: b.doses,
+                parcelles: b.parcelles,
+                debutTime: new Date(b.debut_iso),
+                heureDebut: b.heureDebut,
+                finTime: b.fin_iso ? new Date(b.fin_iso) : undefined,
+                heureFin: b.heureFin || undefined,
+                duree: b.duree === null ? undefined : b.duree,
+                dateISO: b.dateISO || undefined,
+                totalSurf: b.totalSurf === null ? undefined : b.totalSurf,
+                meteo: b.meteo || null,
+                clientId: b.clientId || undefined
+            };
+        }
+
+        function brouillonValide(b) {
+            return !!(b && b.v === 1 && currentExploitation
+                && b.exploitation_id === currentExploitation.id
+                && (b.etape === 1 || b.etape === 2 || b.etape === 3)
+                && b.doses && typeof b.doses === 'object'
+                && Array.isArray(b.parcelles)
+                && b.debut_iso && !isNaN(new Date(b.debut_iso).getTime())
+                && isFinite(b.volume) && isFinite(b.surface));
+        }
+
+        function lireBrouillon() {
+            const b = Stockage.lire(CLE_BROUILLON, null);
+            return brouillonValide(b) ? b : null;
+        }
+
+        // Appelée après chaque geste. Un traitement déjà validé n'est jamais re-sauvegardé
+        // (sinon il ressusciterait comme brouillon et serait compté deux fois).
+        function sauvegarderBrouillon() {
+            if (!workflowEnCours || workflowEnCours.termine || !currentExploitation) return;
+            Stockage.ecrire(CLE_BROUILLON, serialiserWorkflow(workflowEnCours));
+        }
+
+        function afficherBrouillonAccueil() {
+            const carte = document.getElementById('carte-brouillon');
+            if (!carte) return;
+            const b = lireBrouillon();
+            if (!b) {
+                carte.style.display = 'none';
+                carte.innerHTML = '';
+                return;
+            }
+            const debut = new Date(b.debut_iso);
+            const jour = debut.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+            const heure = debut.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+            const n = b.parcelles.length;
+            carte.style.display = 'block';
+            carte.innerHTML = `
+                <h3 style="font-size: 14px; margin-bottom: 8px;">⏸️ Traitement en cours</h3>
+                <div style="font-size: 13px; color: var(--text-light); margin-bottom: 12px;">
+                    Démarré le ${jour} à ${heure} · ${n} parcelle${n > 1 ? 's' : ''} cochée${n > 1 ? 's' : ''}
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <button class="btn-submit" onclick="reprendreBrouillon()">▶ Reprendre</button>
+                    <button class="btn-submit" style="background: white; color: var(--text-light); border: 1.5px solid var(--border);" onclick="abandonnerBrouillon()">Abandonner</button>
+                </div>
+            `;
+        }
+
+        function reprendreBrouillon() {
+            const b = lireBrouillon();
+            if (!b) {
+                afficherBrouillonAccueil();
+                return;
+            }
+            workflowEnCours = deserialiserWorkflow(b);
+            document.getElementById('workflow-volume').value = workflowEnCours.volume;
+            document.getElementById('workflow-surface').value = workflowEnCours.surface;
+            switchView('workflow');
+            afficherEtape1();
+            if (workflowEnCours.etape >= 2) afficherEtape2();
+            if (workflowEnCours.etape === 3) afficherEtape3(true);
+        }
+
+        function abandonnerBrouillon() {
+            if (!confirm('Abandonner ce traitement ? Les parcelles déjà cochées seront perdues.')) return;
+            Stockage.supprimer(CLE_BROUILLON);
+            workflowEnCours = null;
+            arreterHorloge();
+            afficherBrouillonAccueil();
+            majVueWorkflow();
+        }
+
+        // Onglet "Traitement" : affiche un message clair quand aucun traitement n'est en cours
+        // (au lieu d'une page vide, par exemple juste après un rechargement).
+        function majVueWorkflow() {
+            const vide = document.getElementById('workflow-vide');
+            if (!vide) return;
+            if (workflowEnCours) {
+                vide.style.display = 'none';
+                return;
+            }
+            ['step1', 'step2', 'step3'].forEach((id) => { document.getElementById(id).style.display = 'none'; });
+            const b = lireBrouillon();
+            vide.style.display = 'block';
+            vide.innerHTML = b
+                ? `<h3 style="margin-bottom: 8px;">⏸️ Un traitement est en cours</h3>
+                   <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px;">
+                       <button class="btn-submit" onclick="reprendreBrouillon()">▶ Reprendre</button>
+                       <button class="btn-submit" style="background: white; color: var(--text-light); border: 1.5px solid var(--border);" onclick="abandonnerBrouillon()">Abandonner</button>
+                   </div>`
+                : `<h3 style="margin-bottom: 8px;">Aucun traitement en cours</h3>
+                   <button class="btn-submit" style="margin-top: 12px;" onclick="demarrerTraitement()">▶ Démarrer un traitement</button>`;
+        }
+
+        // ---------- Étape 1 : préparation de la bouillie ----------
+
         function demarrerTraitement() {
+            if (!currentExploitation) {
+                alert('Ton exploitation n\'est pas encore chargée. Recharge la page et réessaie.');
+                return;
+            }
+            const existant = lireBrouillon();
+            if (existant) {
+                const heure = new Date(existant.debut_iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+                if (!confirm(`Un traitement est déjà en cours (démarré à ${heure}).\n\nOK : l'abandonner et en commencer un nouveau.\nAnnuler : reprendre celui en cours.`)) {
+                    reprendreBrouillon();
+                    return;
+                }
+                Stockage.supprimer(CLE_BROUILLON);
+            }
             workflowEnCours = {
                 etape: 1,
-                volume: 1000,
-                surface: 8,
+                volume: parseInt(document.getElementById('workflow-volume').value, 10) || 1000,
+                surface: parseFloat(document.getElementById('workflow-surface').value) || 8,
                 produits: {},
                 doses: {},
                 parcelles: [],
                 debutTime: new Date(),
-                heureDebut: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+                heureDebut: heureActuelle()
             };
             switchView('workflow');
             afficherEtape1();
+            sauvegarderBrouillon();
+            afficherBrouillonAccueil();
         }
 
         function afficherEtape1() {
@@ -1379,17 +1606,22 @@
             document.getElementById('step2').style.display = 'none';
             document.getElementById('step3').style.display = 'none';
 
-            const volume = parseInt(document.getElementById('workflow-volume').value || 1000);
-            const surface = parseFloat(document.getElementById('workflow-surface').value || 8);
-            
-            if (volume && surface) {
-                const densite = (volume / surface).toFixed(1);
-                const dbox = document.getElementById('workflow-densité');
-                dbox.innerHTML = `<strong>💧 Densité: ${densite} L/ha</strong>`;
-                dbox.style.display = 'block';
-            }
-
             afficherProduits();
+            cocherProduitsSelonDoses();
+            afficherDensite();
+            afficherDosesEtQuantites();
+        }
+
+        function afficherDensite() {
+            const volume = parseInt(document.getElementById('workflow-volume').value, 10);
+            const surface = parseFloat(document.getElementById('workflow-surface').value);
+            const boite = document.getElementById('workflow-densité');
+            if (volume > 0 && surface > 0) {
+                boite.innerHTML = `<strong>💧 Densité: ${formaterNombre(volume / surface, 1)} L/ha</strong>`;
+                boite.style.display = 'block';
+            } else {
+                boite.style.display = 'none';
+            }
         }
 
         function afficherProduits() {
@@ -1413,7 +1645,14 @@
 
                 const div = document.createElement('div');
                 div.style.flex = '1';
-                div.innerHTML = `<strong style="font-size: 13px;">${prod.nom}</strong><div style="font-size: 11px; color: var(--text-light);">${prod.dose} L/ha (défaut)</div>`;
+                const nom = document.createElement('strong');
+                nom.style.fontSize = '13px';
+                nom.textContent = prod.nom;
+                const detail = document.createElement('div');
+                detail.style.cssText = 'font-size: 11px; color: var(--text-light);';
+                detail.textContent = `${prod.dose} L/ha (défaut)`;
+                div.appendChild(nom);
+                div.appendChild(detail);
 
                 label.appendChild(chk);
                 label.appendChild(div);
@@ -1421,56 +1660,99 @@
             });
         }
 
+        // Coche les produits déjà choisis (retour depuis l'étape 2, reprise d'un brouillon)
+        function cocherProduitsSelonDoses() {
+            document.querySelectorAll('#workflow-produits input[type="checkbox"]').forEach(chk => {
+                chk.checked = Object.prototype.hasOwnProperty.call(workflowEnCours.doses, chk.dataset.produit);
+            });
+        }
+
+        // Appelée quand on coche/décoche un produit, ou qu'on change le volume / la surface.
+        // Les doses déjà ajustées à la main sont conservées ; un produit nouvellement coché
+        // prend sa dose par défaut.
         function calculerWorkflow() {
-            const volume = parseInt(document.getElementById('workflow-volume').value || 0);
-            const surface = parseFloat(document.getElementById('workflow-surface').value || 0);
+            if (!workflowEnCours) return;
+            afficherDensite();
 
-            if (!volume || !surface) return;
+            const volume = parseInt(document.getElementById('workflow-volume').value, 10);
+            const surface = parseFloat(document.getElementById('workflow-surface').value);
+            if (!(volume > 0) || !(surface > 0)) return;
 
-            const densite = volume / surface;
-
-            const produits = [];
             const doses = {};
-
             document.querySelectorAll('#workflow-produits input[type="checkbox"]:checked').forEach(chk => {
                 const nom = chk.dataset.produit;
-                const doseDef = parseFloat(chk.dataset.dose);
-                const quantite = (doseDef * surface).toFixed(1);
-
-                produits.push(`${nom}: ${quantite}L`);
-                doses[nom] = doseDef;
+                const dejaAjustee = workflowEnCours.doses[nom];
+                doses[nom] = (typeof dejaAjustee === 'number' && isFinite(dejaAjustee))
+                    ? dejaAjustee
+                    : parseFloat(chk.dataset.dose);
             });
 
             workflowEnCours.volume = volume;
             workflowEnCours.surface = surface;
             workflowEnCours.doses = doses;
 
-            if (produits.length > 0) {
-                document.getElementById('workflow-resultats').innerHTML = `
-                    <div class="info-box warning">
-                        <strong>📦 Quantités à préparer:</strong>
-                        ${produits.map(p => `<div style="margin-top: 4px;">${p}</div>`).join('')}
-                    </div>
-                `;
-                document.getElementById('workflow-doses').style.display = 'block';
+            afficherDosesEtQuantites();
+            sauvegarderBrouillon();
+        }
 
-                // Afficher les doses ajustables
-                const doseList = document.getElementById('workflow-doses-list');
-                doseList.innerHTML = '';
-                Object.entries(doses).forEach(([nom, dose]) => {
-                    const group = document.createElement('div');
-                    group.style.marginBottom = '8px';
-                    group.innerHTML = `
-                        <label style="font-size: 12px;">${nom}</label>
-                        <input type="number" step="0.1" value="${dose}" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;" 
-                               onchange="doses['${nom}'] = parseFloat(this.value); workflowEnCours.doses['${nom}'] = parseFloat(this.value);">
-                    `;
-                    doseList.appendChild(group);
-                });
-            } else {
+        // Modifie la dose d'un produit (L/ha). Retourne false si la valeur est refusée.
+        function changerDose(nom, valeurBrute) {
+            const valeur = parseFloat(valeurBrute);
+            if (!workflowEnCours || !Object.prototype.hasOwnProperty.call(workflowEnCours.doses, nom)) return false;
+            if (!isFinite(valeur) || valeur <= 0) return false;
+            workflowEnCours.doses[nom] = valeur;
+            afficherQuantites();
+            sauvegarderBrouillon();
+            return true;
+        }
+
+        function afficherQuantites() {
+            const lignes = Object.entries(workflowEnCours.doses)
+                .map(([nom, dose]) => `<div style="margin-top: 4px;">${echapperHtml(nom)} : ${formaterNombre(dose * workflowEnCours.surface, 2)} L</div>`)
+                .join('');
+            document.getElementById('workflow-resultats').innerHTML = `
+                <div class="info-box warning">
+                    <strong>📦 Quantités à préparer:</strong>
+                    ${lignes}
+                </div>
+            `;
+        }
+
+        function afficherDosesEtQuantites() {
+            const noms = Object.keys(workflowEnCours.doses);
+            const panneau = document.getElementById('workflow-doses');
+            if (noms.length === 0) {
                 document.getElementById('workflow-resultats').innerHTML = '';
-                document.getElementById('workflow-doses').style.display = 'none';
+                panneau.style.display = 'none';
+                return;
             }
+            afficherQuantites();
+            panneau.style.display = 'block';
+
+            const liste = document.getElementById('workflow-doses-list');
+            liste.innerHTML = '';
+            noms.forEach(nom => {
+                const groupe = document.createElement('div');
+                groupe.style.marginBottom = '8px';
+
+                const etiquette = document.createElement('label');
+                etiquette.style.fontSize = '12px';
+                etiquette.textContent = nom;
+
+                const champ = document.createElement('input');
+                champ.type = 'number';
+                champ.step = '0.01';
+                champ.min = '0';
+                champ.value = workflowEnCours.doses[nom];
+                champ.style.cssText = 'width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;';
+                champ.addEventListener('change', () => {
+                    if (!changerDose(nom, champ.value)) champ.value = workflowEnCours.doses[nom];
+                });
+
+                groupe.appendChild(etiquette);
+                groupe.appendChild(champ);
+                liste.appendChild(groupe);
+            });
         }
 
         function passerEtape2() {
@@ -1478,19 +1760,24 @@
                 alert('Sélectionne au moins un produit');
                 return;
             }
+            if (!(workflowEnCours.volume > 0) || !(workflowEnCours.surface > 0)) {
+                alert('Renseigne un volume et une surface supérieurs à 0');
+                return;
+            }
             workflowEnCours.etape = 2;
             afficherEtape2();
+            sauvegarderBrouillon();
         }
+
+        // ---------- Étape 2 : pulvérisation ----------
 
         function afficherEtape2() {
             document.getElementById('step1').style.display = 'none';
             document.getElementById('step2').style.display = 'block';
             document.getElementById('step3').style.display = 'none';
 
-            // Afficher l'horloge
             afficherHorloge();
 
-            // Afficher les parcelles
             const cont = document.getElementById('workflow-parcelles');
             cont.innerHTML = '';
 
@@ -1503,81 +1790,127 @@
                 chk.dataset.surface = p.surface;
                 chk.dataset.parcelle = p.nom;
                 chk.onchange = majProgression;
+                chk.checked = workflowEnCours.parcelles.some(pr => pr.nom === p.nom);
 
                 const div = document.createElement('div');
                 div.style.flex = '1';
-                let timeStr = '';
-                const traited = workflowEnCours.parcelles.find(pr => pr.nom === p.nom);
-                if (traited) {
-                    chk.checked = true;
-                    timeStr = `<div style="font-size: 10px; color: var(--accent);">✓ ${traited.time}</div>`;
-                }
-                div.innerHTML = `<strong style="font-size: 13px;">${p.nom}</strong><div style="font-size: 11px; color: var(--text-light);">${p.surface} ha${p.cepage ? ' · ' + p.cepage : ''}</div>${timeStr}`;
+                const nom = document.createElement('strong');
+                nom.style.fontSize = '13px';
+                nom.textContent = p.nom;
+                const detail = document.createElement('div');
+                detail.style.cssText = 'font-size: 11px; color: var(--text-light);';
+                detail.textContent = `${p.surface} ha${p.cepage ? ' · ' + p.cepage : ''}`;
+                const heure = document.createElement('div');
+                heure.className = 'heure-parcelle';
+                heure.style.cssText = 'font-size: 10px; color: var(--accent);';
+                div.appendChild(nom);
+                div.appendChild(detail);
+                div.appendChild(heure);
 
                 label.appendChild(chk);
                 label.appendChild(div);
                 cont.appendChild(label);
             });
+
+            majProgression();
+        }
+
+        function arreterHorloge() {
+            if (horlogeIntervalle) {
+                clearInterval(horlogeIntervalle);
+                horlogeIntervalle = null;
+            }
         }
 
         function afficherHorloge() {
+            arreterHorloge();
             const timer = document.getElementById('workflow-timer');
             const debut = workflowEnCours.debutTime;
 
             const miseAJour = () => {
-                const maintenant = new Date();
-                const diff = Math.round((maintenant - debut) / 60000);
+                const diff = Math.round((new Date() - debut) / 60000);
                 timer.innerHTML = `<strong>⏱️ Durée: ${diff} min</strong>`;
             };
 
             miseAJour();
-            setInterval(miseAJour, 10000);
+            horlogeIntervalle = setInterval(miseAJour, 10000);
         }
 
+        // Appelée à chaque case cochée / décochée. L'heure d'une parcelle est enregistrée au moment
+        // où on la coche et n'est plus jamais modifiée tant qu'elle reste cochée.
         function majProgression() {
+            if (!workflowEnCours) return;
+            const cases = document.querySelectorAll('#workflow-parcelles input[type="checkbox"]');
+
+            const coches = new Set();
             let totalTraite = 0;
-            const parcChecked = [];
-
-            document.querySelectorAll('#workflow-parcelles input[type="checkbox"]').forEach(cb => {
+            cases.forEach(cb => {
                 if (cb.checked) {
-                    const surf = parseFloat(cb.dataset.surface);
-                    totalTraite += surf;
-                    const nom = cb.dataset.parcelle;
-
-                    if (!workflowEnCours.parcelles.some(p => p.nom === nom)) {
-                        const now = new Date();
-                        workflowEnCours.parcelles.push({ 
-                            nom, 
-                            time: now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) 
-                        });
-                    }
-                    parcChecked.push(nom);
-                } else {
-                    workflowEnCours.parcelles = workflowEnCours.parcelles.filter(p => parcChecked.includes(p.nom));
+                    coches.add(cb.dataset.parcelle);
+                    totalTraite += parseFloat(cb.dataset.surface) || 0;
                 }
             });
 
-            const surfaceAttendue = workflowEnCours.surface;
-            const restant = (surfaceAttendue - totalTraite).toFixed(2);
-            const pourcentage = ((totalTraite / surfaceAttendue) * 100).toFixed(0);
+            // On garde, dans l'ordre chronologique, les parcelles encore cochées avec leur heure d'origine...
+            const gardees = workflowEnCours.parcelles.filter(p => coches.has(p.nom));
+            const dejaLa = new Set(gardees.map(p => p.nom));
+            // ...et on ajoute les nouvelles avec l'heure actuelle
+            cases.forEach(cb => {
+                if (cb.checked && !dejaLa.has(cb.dataset.parcelle)) {
+                    gardees.push({ nom: cb.dataset.parcelle, time: heureActuelle() });
+                    dejaLa.add(cb.dataset.parcelle);
+                }
+            });
+            workflowEnCours.parcelles = gardees;
 
+            // Heure affichée sous chaque parcelle cochée
+            cases.forEach(cb => {
+                const etiquette = cb.closest ? cb.closest('label') : null;
+                const zone = etiquette ? etiquette.querySelector('.heure-parcelle') : null;
+                if (!zone) return;
+                const p = gardees.find(x => x.nom === cb.dataset.parcelle);
+                zone.textContent = p ? '✓ ' + p.time : '';
+            });
+
+            const attendu = workflowEnCours.surface;
+            const pourcentage = attendu > 0 ? ((totalTraite / attendu) * 100).toFixed(0) : '0';
+            const restant = (attendu - totalTraite).toFixed(2);
             const prog = document.getElementById('workflow-progress');
             prog.innerHTML = `<strong>${totalTraite.toFixed(2)} ha pulvérisé</strong><span>${pourcentage}% · ${restant} ha restant</span>`;
             prog.style.display = 'block';
 
-            document.getElementById('btn-etape3').disabled = workflowEnCours.parcelles.length === 0;
+            document.getElementById('btn-etape3').disabled = gardees.length === 0;
+            sauvegarderBrouillon();
+        }
+
+        function retourEtape1() {
+            workflowEnCours.etape = 1;
+            afficherEtape1();
+            sauvegarderBrouillon();
         }
 
         function passerEtape3() {
             if (workflowEnCours.parcelles.length === 0) {
-                alert('Cooche au moins une parcelle');
+                alert('Coche au moins une parcelle');
                 return;
             }
             workflowEnCours.etape = 3;
             afficherEtape3();
         }
 
-        async function afficherEtape3() {
+        function retourEtape2() {
+            workflowEnCours.etape = 2;
+            afficherEtape2();
+            sauvegarderBrouillon();
+        }
+
+        // ---------- Étape 3 : compte rendu ----------
+
+        // reprise = true quand on rouvre un brouillon déjà à l'étape 3 : l'heure de fin déjà figée
+        // est conservée (elle ne doit pas devenir "l'heure de la reprise").
+        async function afficherEtape3(reprise) {
+            const w = workflowEnCours;
+            arreterHorloge();
             document.getElementById('step1').style.display = 'none';
             document.getElementById('step2').style.display = 'none';
             document.getElementById('step3').style.display = 'block';
@@ -1585,34 +1918,36 @@
             document.getElementById('etape3-actions').style.display = 'grid';
             document.getElementById('btn-valider').disabled = false;
 
-            // Ces valeurs sont figées ici, une seule fois, et réutilisées telles quelles
-            // par validerRapport() — pour ne jamais avoir un écart entre ce qui est affiché
-            // et ce qui est réellement enregistré.
-            const fin = new Date();
-            workflowEnCours.finTime = fin;
-            workflowEnCours.heureFin = fin.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-            workflowEnCours.duree = Math.round((fin - workflowEnCours.debutTime) / 60000);
-            // Date du traitement en heure LOCALE (toISOString donnerait la date UTC, décalée de 1-2 h en France)
-            const debutT = workflowEnCours.debutTime;
-            workflowEnCours.dateISO = `${debutT.getFullYear()}-${String(debutT.getMonth() + 1).padStart(2, '0')}-${String(debutT.getDate()).padStart(2, '0')}`;
-            workflowEnCours.totalSurf = workflowEnCours.parcelles.reduce((s, p) => {
-                const parc = parcelles.find(x => x.nom === p.nom);
-                return s + (parc ? parc.surface : 0);
-            }, 0);
+            // Ces valeurs sont figées ici, une seule fois, et réutilisées telles quelles par
+            // validerRapport() : jamais d'écart entre ce qui est affiché et ce qui est enregistré.
+            if (!(reprise && w.finTime)) {
+                const fin = new Date();
+                w.finTime = fin;
+                w.heureFin = fin.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+                w.duree = Math.round((fin - w.debutTime) / 60000);
+                // Date du traitement en heure LOCALE (toISOString donnerait la date UTC, décalée de 1-2 h en France)
+                const d = w.debutTime;
+                w.dateISO = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                w.totalSurf = w.parcelles.reduce((s, p) => {
+                    const parc = parcelles.find(x => x.nom === p.nom);
+                    return s + (parc ? parc.surface : 0);
+                }, 0);
+                w.meteo = null;
+            }
+            sauvegarderBrouillon();
 
-            const recap = document.getElementById('workflow-recap');
-            const parcHtml = workflowEnCours.parcelles.map(p => `${p.nom} (${p.time})`).join('<br>');
-            const prodHtml = Object.entries(workflowEnCours.doses).map(([p, d]) => `${p}: ${d.toFixed(1)} L/ha`).join('<br>');
+            const parcHtml = w.parcelles.map(p => `${echapperHtml(p.nom)} (${p.time})`).join('<br>');
+            const prodHtml = Object.entries(w.doses).map(([p, d]) => `${echapperHtml(p)}: ${formaterNombre(d, 3)} L/ha`).join('<br>');
 
-            recap.innerHTML = `
+            document.getElementById('workflow-recap').innerHTML = `
                 <div class="item-card" style="margin-bottom: 12px;">
-                    <strong>📅 Date</strong><div style="font-size: 13px; margin-top: 4px;">${new Date().toLocaleDateString('fr-FR')}</div>
+                    <strong>📅 Date</strong><div style="font-size: 13px; margin-top: 4px;">${w.debutTime.toLocaleDateString('fr-FR')}</div>
                 </div>
                 <div class="item-card" style="margin-bottom: 12px;">
-                    <strong>⏱️ Durée</strong><div style="font-size: 13px; margin-top: 4px;">${workflowEnCours.heureDebut} → ${workflowEnCours.heureFin} (${workflowEnCours.duree} min)</div>
+                    <strong>⏱️ Durée</strong><div style="font-size: 13px; margin-top: 4px;">${w.heureDebut} → ${w.heureFin} (${w.duree} min)</div>
                 </div>
                 <div class="item-card" style="margin-bottom: 12px;">
-                    <strong>📍 Parcelles traitées (${workflowEnCours.totalSurf.toFixed(2)} ha)</strong><div style="font-size: 12px; margin-top: 6px; color: var(--text-light);">${parcHtml}</div>
+                    <strong>📍 Parcelles traitées (${w.totalSurf.toFixed(2)} ha)</strong><div style="font-size: 12px; margin-top: 6px; color: var(--text-light);">${parcHtml}</div>
                 </div>
                 <div class="item-card" style="margin-bottom: 12px;">
                     <strong>🧴 Produits</strong><div style="font-size: 12px; margin-top: 6px; color: var(--text-light);">${prodHtml}</div>
@@ -1625,68 +1960,235 @@
                 </div>
             `;
 
-            workflowEnCours.meteo = await recupererMeteoTranche(workflowEnCours.debutTime, workflowEnCours.finTime);
-            const meteoContenu = document.getElementById('meteo-recap-contenu');
-            if (meteoContenu) meteoContenu.innerHTML = formaterBlocMeteo(workflowEnCours.meteo);
+            const zoneMeteo = () => document.getElementById('meteo-recap-contenu');
+
+            if (reprise && w.meteo) {
+                zoneMeteo().innerHTML = formaterBlocMeteo(w.meteo);
+                return;
+            }
+            if (navigator.onLine === false) {
+                zoneMeteo().innerHTML = '<div style="font-size: 12px; color: var(--text-light);">📴 Hors connexion : le bulletin météo sera ajouté automatiquement à l\'envoi.</div>';
+                return;
+            }
+
+            const meteo = await recupererMeteoTranche(w.debutTime, w.finTime);
+            // Si entre-temps on a quitté l'étape 3 ou validé, on n'y touche plus
+            // (à l'envoi, la météo manquante est de toute façon récupérée).
+            if (workflowEnCours !== w || w.etape !== 3 || w.termine) return;
+            w.meteo = meteo;
+            sauvegarderBrouillon();
+            const zone = zoneMeteo();
+            if (zone) zone.innerHTML = formaterBlocMeteo(meteo);
         }
 
-        function retourEtape1() {
-            workflowEnCours.etape = 1;
-            afficherEtape1();
+        // ---------- Enregistrement et envoi (fonctionne sans réseau) ----------
+
+        function lireFileAttenteExploitation() {
+            const file = Stockage.lire(CLE_FILE_ATTENTE, []);
+            if (!Array.isArray(file) || !currentExploitation) return [];
+            return file.filter(r => r && r.client_id && r.exploitation_id === currentExploitation.id);
         }
 
-        function retourEtape2() {
-            workflowEnCours.etape = 2;
-            afficherEtape2();
+        function retirerDeLaFile(clientId) {
+            const file = Stockage.lire(CLE_FILE_ATTENTE, []);
+            Stockage.ecrire(CLE_FILE_ATTENTE, (Array.isArray(file) ? file : []).filter(r => !r || r.client_id !== clientId));
+        }
+
+        function estErreurReseau(err) {
+            if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+            return /failed to fetch|load failed|networkerror|network request failed|network error|timeout|délai|aborted/i.test(messageErreur(err));
+        }
+
+        // Envoie un compte rendu. "upsert" sur client_id : renvoyer le même compte rendu
+        // ne crée jamais de doublon. Ne lève jamais d'erreur.
+        async function envoyerUnRapport(item) {
+            // Bulletin météo manquant (validation sans réseau) : on le récupère maintenant,
+            // sur la vraie plage horaire du traitement.
+            if (!item.meteo && item.debut_iso && item.fin_iso && navigator.onLine !== false) {
+                const meteo = await recupererMeteoTranche(new Date(item.debut_iso), new Date(item.fin_iso));
+                if (meteo) item.meteo = meteo;
+            }
+            const { debut_iso, fin_iso, ...donnees } = item; // debut_iso / fin_iso ne servent qu'en local
+            try {
+                const reponse = await avecDelai(
+                    supabaseClient.from('traitements').upsert(donnees, { onConflict: 'client_id' }),
+                    15000,
+                    { error: { message: 'Délai dépassé' } }
+                );
+                if (reponse.error) {
+                    return { ok: false, reseau: estErreurReseau(reponse.error), message: messageErreur(reponse.error) };
+                }
+                return { ok: true };
+            } catch (err) {
+                return { ok: false, reseau: estErreurReseau(err), message: messageErreur(err) };
+            }
+        }
+
+        async function executerEnvoiFile() {
+            if (!currentExploitation || !currentUser) return 0;
+            const tentes = new Set();
+            let envoyes = 0;
+            dernierEtatEnvoi = null;
+            for (;;) {
+                // On relit la file à chaque tour : un compte rendu ajouté pendant l'envoi est pris en compte
+                const item = lireFileAttenteExploitation().find(r => !tentes.has(r.client_id));
+                if (!item) break;
+                tentes.add(item.client_id);
+                if (navigator.onLine === false) {
+                    dernierEtatEnvoi = { reseau: true, message: 'Pas de réseau' };
+                    break;
+                }
+                const res = await envoyerUnRapport(item);
+                if (res.ok) {
+                    retirerDeLaFile(item.client_id);
+                    envoyes++;
+                } else {
+                    dernierEtatEnvoi = { reseau: res.reseau, message: res.message };
+                    if (res.reseau) break; // inutile d'insister sans réseau ; une autre erreur ne bloque pas les suivants
+                }
+            }
+            if (envoyes > 0) {
+                await chargerTraitements();
+                afficherMenu();
+            }
+            afficherFileAttente();
+            return envoyes;
+        }
+
+        // Un seul envoi à la fois : si un envoi est déjà en cours, on attend le même.
+        function envoyerFileAttente() {
+            if (!envoiFilePromesse) {
+                envoiFilePromesse = executerEnvoiFile().finally(() => { envoiFilePromesse = null; });
+            }
+            return envoiFilePromesse;
+        }
+
+        async function renvoyerMaintenant() {
+            await envoyerFileAttente();
+            if (lireFileAttenteExploitation().length > 0 && dernierEtatEnvoi && !dernierEtatEnvoi.reseau) {
+                alert('Envoi impossible : ' + dernierEtatEnvoi.message);
+            }
+        }
+
+        function afficherFileAttente() {
+            const bandeau = document.getElementById('bandeau-attente');
+            if (bandeau) {
+                const n = lireFileAttenteExploitation().length;
+                if (n === 0) {
+                    bandeau.style.display = 'none';
+                    bandeau.innerHTML = '';
+                } else {
+                    const etat = dernierEtatEnvoi && !dernierEtatEnvoi.reseau
+                        ? `⚠️ L'envoi a échoué : ${echapperHtml(dernierEtatEnvoi.message)}`
+                        : '📴 Il sera envoyé dès que le réseau revient.';
+                    bandeau.style.display = 'block';
+                    bandeau.innerHTML = `
+                        <h3 style="font-size: 14px; margin-bottom: 6px;">⏳ ${n} compte${n > 1 ? 's' : ''} rendu${n > 1 ? 's' : ''} en attente d'envoi</h3>
+                        <div style="font-size: 12px; color: var(--text-light); margin-bottom: 10px;">${etat}</div>
+                        <button class="btn-submit" onclick="renvoyerMaintenant()">↻ Renvoyer maintenant</button>
+                    `;
+                }
+            }
+            afficherHisto();
+        }
+
+        function terminerEtRetourAccueil() {
+            workflowEnCours = null;
+            arreterHorloge();
+            switchView('menu');
         }
 
         async function validerRapport() {
+            if (!workflowEnCours || !currentExploitation || !currentUser) return;
+            const w = workflowEnCours;
+            const bouton = document.getElementById('btn-valider');
+            bouton.disabled = true;
+            bouton.textContent = 'Enregistrement...';
             try {
-                document.getElementById('btn-valider').disabled = true;
+                // L'identifiant est créé une seule fois : si on réessaie, c'est le même compte rendu
+                w.clientId = w.clientId || genererUUID();
 
                 const rapport = {
+                    client_id: w.clientId,
                     exploitation_id: currentExploitation.id,
-                    date: workflowEnCours.dateISO,
-                    heure_debut: workflowEnCours.heureDebut,
-                    heure_fin: workflowEnCours.heureFin,
-                    duree_minutes: workflowEnCours.duree,
-                    parcelles: workflowEnCours.parcelles,
-                    produits: workflowEnCours.doses,
-                    surface_traitee: workflowEnCours.totalSurf,
-                    volume_prepare: workflowEnCours.volume,
-                    meteo: workflowEnCours.meteo || null,
-                    created_by: currentUser.id
+                    date: w.dateISO,
+                    heure_debut: w.heureDebut,
+                    heure_fin: w.heureFin,
+                    duree_minutes: w.duree,
+                    parcelles: w.parcelles,
+                    produits: w.doses,
+                    surface_traitee: w.totalSurf,
+                    volume_prepare: w.volume,
+                    meteo: w.meteo || null,
+                    created_by: currentUser.id,
+                    debut_iso: w.debutTime.toISOString(),
+                    fin_iso: w.finTime.toISOString()
                 };
 
-                const { data: rapportEnregistre, error } = await supabaseClient
-                    .from('traitements')
-                    .insert([rapport])
-                    .select()
-                    .single();
+                // 1) D'abord sur le téléphone : plus rien ne peut se perdre, même sans réseau
+                const file = Stockage.lire(CLE_FILE_ATTENTE, []);
+                const filePropre = Array.isArray(file) ? file : [];
+                const dejaLa = filePropre.some(r => r && r.client_id === rapport.client_id);
+                const stocke = dejaLa || Stockage.ecrire(CLE_FILE_ATTENTE, [...filePropre, rapport]);
 
-                if (error) throw error;
+                let envoye = false;
+                if (stocke) {
+                    w.termine = true;
+                    Stockage.supprimer(CLE_BROUILLON);
+                    // 2) Puis on tente l'envoi (une 2e tentative si un envoi précédent était déjà en cours)
+                    for (let essai = 0; essai < 2 && !envoye; essai++) {
+                        await envoyerFileAttente();
+                        envoye = !lireFileAttenteExploitation().some(r => r.client_id === rapport.client_id);
+                    }
+                } else {
+                    // Stockage du téléphone indisponible (navigation privée...) : envoi direct, sans filet
+                    const res = await envoyerUnRapport(rapport);
+                    if (!res.ok) {
+                        alert('Impossible d\'enregistrer le compte rendu : ' + res.message + '\nVérifie le réseau et réessaie.');
+                        bouton.disabled = false;
+                        bouton.textContent = '✓ Valider & Archiver';
+                        return;
+                    }
+                    w.termine = true;
+                    Stockage.supprimer(CLE_BROUILLON);
+                    envoye = true;
+                    await chargerTraitements();
+                    afficherMenu();
+                    afficherHisto();
+                }
 
-                await chargerTraitements();
-                afficherMenu();
-                afficherHisto();
+                dernierRapport = rapport;
+                afficherBrouillonAccueil();
+                afficherFileAttente();
+
+                let message;
+                if (envoye) {
+                    message = '<strong style="color: var(--success);">✓ Compte rendu archivé</strong>';
+                } else if (dernierEtatEnvoi && !dernierEtatEnvoi.reseau) {
+                    message = `<strong style="color: #a13b2f;">⚠️ Enregistré sur ton téléphone, mais l'envoi a échoué</strong>
+                               <div style="font-size: 12px; color: var(--text-light); margin-top: 6px;">${echapperHtml(dernierEtatEnvoi.message)}<br>Il sera réessayé automatiquement.</div>`;
+                } else {
+                    message = `<strong style="color: var(--accent);">📴 Enregistré sur ton téléphone</strong>
+                               <div style="font-size: 12px; color: var(--text-light); margin-top: 6px;">Il sera envoyé dès que le réseau revient. Rien n'est perdu.</div>`;
+                }
 
                 // On garde l'utilisateur sur l'étape 3, avec une confirmation claire et
                 // le choix de télécharger le PDF tout de suite plutôt que de naviguer d'office.
                 document.getElementById('etape3-actions').style.display = 'none';
                 document.getElementById('workflow-confirmation').innerHTML = `
                     <div class="item-card" style="border-left-color: var(--success); text-align: center; padding: 16px;">
-                        <strong style="color: var(--success);">✓ Compte rendu archivé</strong>
+                        ${message}
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px;">
-                            <button class="btn-submit" onclick='genererPDFTraitement(${JSON.stringify(rapportEnregistre).replace(/'/g, "&apos;")})'>📄 Télécharger le PDF</button>
-                            <button class="btn-submit" style="background: white; color: var(--primary); border: 1.5px solid var(--border);" onclick="workflowEnCours = null; switchView('menu');">🏠 Retour à l'accueil</button>
+                            <button class="btn-submit" onclick="genererPDFTraitement(dernierRapport)">📄 Télécharger le PDF</button>
+                            <button class="btn-submit" style="background: white; color: var(--primary); border: 1.5px solid var(--border);" onclick="terminerEtRetourAccueil()">🏠 Retour à l'accueil</button>
                         </div>
                     </div>
                 `;
-
             } catch (err) {
                 console.error('Erreur sauvegarde:', err);
                 alert('Erreur: ' + messageErreur(err));
-                document.getElementById('btn-valider').disabled = false;
+                bouton.disabled = false;
+                bouton.textContent = '✓ Valider & Archiver';
             }
         }
 
@@ -1715,14 +2217,38 @@
             `;
         }
 
+        function genererPDFTraitementEnAttente(i) {
+            const item = lireFileAttenteExploitation()[i];
+            if (item) genererPDFTraitement(item);
+        }
+
         function afficherHisto() {
             const list = document.getElementById('histo-list');
-            if (traitements.length === 0) {
+            const enAttente = lireFileAttenteExploitation();
+
+            let html = '';
+            if (enAttente.length > 0) {
+                html += `<div style="font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 8px;">⏳ EN ATTENTE D'ENVOI (${enAttente.length})</div>`;
+                html += enAttente.map((t, i) => `
+                    <div class="item-card" style="border-left-color: var(--accent); background: #fffaf0;">
+                        <div class="item-row" style="margin-bottom: 6px;">
+                            <strong style="font-size: 14px; color: var(--primary);">📋 ${new Date(t.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</strong>
+                            <button class="btn-icon-delete" title="Télécharger le PDF" style="color: var(--primary);" onclick="genererPDFTraitementEnAttente(${i})">📄</button>
+                        </div>
+                        <div style="font-size: 12px; color: var(--text-light);">
+                            ⏱️ ${t.heure_debut} → ${t.heure_fin} <span style="opacity: 0.6;">(${t.duree_minutes} min)</span> · en attente d'envoi
+                        </div>
+                    </div>
+                `).join('');
+                if (traitements.length > 0) html += '<div style="height: 8px;"></div>';
+            }
+
+            if (traitements.length === 0 && enAttente.length === 0) {
                 list.innerHTML = '<p class="empty-note">Aucun traitement enregistré pour l\'instant.</p>';
                 return;
             }
 
-            list.innerHTML = traitements.map((t, i) => `
+            html += traitements.map((t, i) => `
                 <div class="item-card">
                     <div class="item-row" style="margin-bottom: 6px;">
                         <strong style="font-size: 14px; color: var(--primary);">📋 ${new Date(t.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</strong>
@@ -1737,6 +2263,7 @@
                     ${t.meteo ? `<div style="font-size: 11px; color: var(--text-light); margin-top: 6px;">💨 ${t.meteo.vent_moyen} km/h (rafales ${t.meteo.rafale_max}) · 🌧️ ${t.meteo.pluie_totale} mm</div>` : ''}
                 </div>
             `).join('');
+            list.innerHTML = html;
         }
 
         function afficherReglages() {
@@ -1837,7 +2364,7 @@
 
                 sousTitre('Produits appliqués');
                 Object.entries(t.produits || {}).forEach(([nom, dose]) => {
-                    ligne(`• ${nom} : ${Number(dose).toFixed(1)} L/ha`, 10, false);
+                    ligne(`• ${nom} : ${formaterNombre(dose, 3)} L/ha`, 10, false);
                     y += 5.5;
                 });
 
@@ -1872,10 +2399,17 @@
             document.getElementById(view).classList.add('active');
             document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
             document.querySelector(`button[onclick="switchView('${view}')"]`).classList.add('active');
+            if (view === 'workflow') majVueWorkflow();
         }
 
         // ===== INIT =====
         window.addEventListener('load', initialiserApp);
+        window.addEventListener('online', () => { envoyerFileAttente(); });
+        window.addEventListener('pagehide', sauvegarderBrouillon);
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') sauvegarderBrouillon();
+            else envoyerFileAttente();
+        });
     </script>
 </body>
 </html>
