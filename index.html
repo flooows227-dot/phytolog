@@ -554,7 +554,7 @@
                         <label class="form-label">Cocher les parcelles au fur et à mesure</label>
                         <div id="workflow-parcelles"></div>
 
-                        <button type="button" class="btn-submit" style="background: white; color: var(--primary); border: 1.5px solid var(--border); margin-top: 10px;" onclick="basculerFormulaireNouvelleParcelle()">+ Nouvelle parcelle</button>
+                        <button type="button" class="btn-submit" data-admin-seulement style="background: white; color: var(--primary); border: 1.5px solid var(--border); margin-top: 10px;" onclick="basculerFormulaireNouvelleParcelle()">+ Nouvelle parcelle</button>
                         <div id="workflow-nouvelle-parcelle" style="display: none; margin-top: 10px; padding: 12px; background: var(--light-bg); border-radius: 10px;">
                             <div class="form-group">
                                 <label class="form-label">Nom de la parcelle</label>
@@ -607,7 +607,35 @@
 
             <!-- RÉGLAGES -->
             <section id="reglages" class="section">
-                <div class="form-card">
+                <div class="form-card" id="reglages-note-role" style="display: none; background: var(--light-bg);"></div>
+
+                <div class="form-card" id="carte-compte">
+                    <h3 style="margin-bottom: 12px;">👤 Mon compte</h3>
+                    <div id="compte-email-info" style="font-size: 13px; margin-bottom: 12px;"></div>
+                    <div id="compte-email-formulaire">
+                        <div class="form-group">
+                            <label class="form-label">Email</label>
+                            <input type="email" id="compte-email-champ" class="form-input" placeholder="toi@exemple.fr">
+                        </div>
+                        <button class="btn-submit" onclick="demanderLierEmail()">📧 Ajouter mon email</button>
+                        <div id="compte-email-statut" style="font-size: 13px; margin-top: 10px;"></div>
+                    </div>
+                </div>
+
+                <div class="form-card" data-admin-seulement>
+                    <h3 style="margin-bottom: 16px;">🤝 Collaborateurs</h3>
+                    <div id="reglages-collaborateurs-list"></div>
+                    <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
+                        <div class="form-group">
+                            <label class="form-label">Inviter par email</label>
+                            <input type="email" id="reg-collaborateur-email" class="form-input" placeholder="collegue@exemple.fr">
+                        </div>
+                        <button class="btn-submit" onclick="inviterCollaborateur()">+ Inviter</button>
+                        <p style="font-size: 11px; color: var(--text-light); margin-top: 8px;">La personne invitée doit ajouter cette même adresse email dans "Mon compte" pour accéder à ton exploitation.</p>
+                    </div>
+                </div>
+
+                <div class="form-card" data-admin-seulement>
                     <h3 style="margin-bottom: 16px;">🏡 Mon exploitation</h3>
                     <div class="form-group">
                         <label class="form-label">Nom</label>
@@ -637,7 +665,7 @@
                 <div class="form-card">
                     <h3 style="margin-bottom: 16px;">🌱 Mes parcelles</h3>
                     <div id="reglages-parcelles-list"></div>
-                    <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
+                    <div data-admin-seulement style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
                         <div class="form-group">
                             <label class="form-label">Nom de la parcelle</label>
                             <input type="text" id="reg-parcelle-nom" class="form-input" placeholder="Ex: Syrah coteau">
@@ -659,7 +687,7 @@
                     <p style="font-size: 12px; color: var(--text-light); margin-bottom: 14px;">Les doses saisies ici sont juste tes réglages perso — vérifie toujours l'autorisation et la dose homologuée sur E-Phy.</p>
                     <input type="text" id="reglages-produits-recherche" class="form-input" placeholder="🔍 Rechercher un produit..." style="margin-bottom: 10px;" oninput="filtrerReglagesProduits(this.value)">
                     <div id="reglages-produits-list" style="max-height: 400px; overflow-y: auto;"></div>
-                    <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
+                    <div data-admin-seulement style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
                         <div class="form-group">
                             <label class="form-label">Nom du produit</label>
                             <input type="text" id="reg-produit-nom" class="form-input" placeholder="Ex: Cuivre bio 20%">
@@ -692,14 +720,15 @@
         // ===== CONFIGURATION SUPABASE =====
         const SUPABASE_URL = 'https://rrlhndhghcvxmzwqsurf.supabase.co';
         const SUPABASE_KEY = 'sb_publishable_ZIF16DRmkd7PTcvZvbm2uA_tAM_jPGO';
-        // On utilise la connexion anonyme Supabase (identité réelle et vérifiable côté serveur,
-        // mais invisible pour l'utilisateur — pas d'écran de login). Nécessite persistSession
-        // pour garder la même identité entre deux visites.
+        // On démarre en connexion anonyme Supabase (identité réelle et vérifiable côté serveur,
+        // mais invisible pour l'utilisateur — pas d'écran de login), avec la possibilité d'y
+        // attacher un email ensuite (voir lierEmail plus bas). detectSessionInUrl doit rester
+        // activé : c'est lui qui finalise la connexion au retour du lien reçu par email.
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
             auth: {
                 persistSession: true,
                 autoRefreshToken: true,
-                detectSessionInUrl: false
+                detectSessionInUrl: true
             }
         });
 
@@ -715,6 +744,8 @@
         let envoiFilePromesse = null; // envoi de la file d'attente en cours (évite deux envois en parallèle)
         let dernierEtatEnvoi = null;  // { reseau, message } du dernier échec d'envoi
         let dernierRapport = null;    // dernier compte rendu validé (sert au bouton PDF de la confirmation)
+        let monRole = null;           // 'admin' ou 'collaborateur' sur l'exploitation actuelle
+        let collaborateurs = [];      // liste des invitations/collaborateurs (admin uniquement)
 
         // ===== STOCKAGE LOCAL (brouillon + comptes rendus en attente) =====
         // Tout passe par cet objet. Le jour où PhytoLog sera une application des magasins, on
@@ -792,10 +823,14 @@
                 await chargerParcelles();
                 await chargerProduits();
                 await chargerTraitements();
+                await chargerCollaborateurs();
 
                 afficherMenu();
                 afficherHisto();
                 afficherReglages();
+                afficherCollaborateurs();
+                afficherStatutCompte();
+                appliquerRestrictionsRole();
                 afficherBrouillonAccueil();
                 afficherFileAttente();
                 envoyerFileAttente();
@@ -1081,7 +1116,28 @@
             `;
         }
 
+        // Si l'email désormais associé au compte correspond à une invitation en attente
+        // (posée par un admin avant même que la personne se soit connectée), on l'attache
+        // à l'utilisateur réel qui vient de se connecter. Sans effet si aucune invitation
+        // ne correspond, ou si l'utilisateur n'a pas encore d'email confirmé.
+        async function reclamerInvitationEnAttente() {
+            if (!currentUser || !currentUser.email) return;
+            try {
+                const { data, error } = await supabaseClient
+                    .from('collaborateurs')
+                    .update({ user_id: currentUser.id })
+                    .eq('email', currentUser.email)
+                    .is('user_id', null)
+                    .select();
+                if (error) throw error;
+            } catch (err) {
+                console.warn('Réclamation invitation impossible:', err);
+            }
+        }
+
         async function verifierExploitationExistante() {
+            await reclamerInvitationEnAttente();
+
             const { data, error } = await supabaseClient
                 .from('exploitations')
                 .select('*')
@@ -1092,6 +1148,7 @@
 
             if (data && data.length > 0) {
                 currentExploitation = data[0];
+                monRole = 'admin';
                 document.getElementById('exploitation-name').textContent = currentExploitation.nom;
 
                 // Auto-réparation : si l'exploitation n'a pas encore de coordonnées GPS, on les calcule
@@ -1112,7 +1169,67 @@
                 chargerMeteoActuelle();
                 return true;
             }
-            return false;
+
+            // Pas admin d'une exploitation : peut-être collaborateur d'une autre ?
+            const { data: monAcces, error: erreurAcces } = await supabaseClient
+                .from('collaborateurs')
+                .select('exploitation_id, role')
+                .eq('user_id', currentUser.id)
+                .limit(1);
+
+            if (erreurAcces) throw erreurAcces;
+            if (!monAcces || monAcces.length === 0) return false;
+
+            const { data: exploitationAccedee, error: erreurExploit } = await supabaseClient
+                .from('exploitations')
+                .select('*')
+                .eq('id', monAcces[0].exploitation_id)
+                .single();
+
+            if (erreurExploit || !exploitationAccedee) return false;
+
+            currentExploitation = exploitationAccedee;
+            monRole = monAcces[0].role || 'collaborateur';
+            document.getElementById('exploitation-name').textContent = currentExploitation.nom;
+            chargerMeteoActuelle();
+            return true;
+        }
+
+        // Attache un email au compte actuel (qu'il soit anonyme ou déjà collaborateur) : envoie
+        // un lien de confirmation par email. Aucune donnée n'est perdue ni dupliquée — c'est le
+        // MÊME compte qui reçoit simplement un email, il ne change pas d'identifiant.
+        async function lierEmail(email) {
+            const statut = document.getElementById('compte-email-statut');
+            try {
+                const { error } = await supabaseClient.auth.updateUser({ email });
+                if (error) throw error;
+                if (statut) statut.innerHTML = `<span style="color: var(--success);">✓ Email envoyé à ${echapperHtml(email)} — clique sur le lien reçu pour confirmer.</span>`;
+            } catch (err) {
+                if (statut) statut.innerHTML = `<span style="color: #a13b2f;">Erreur : ${echapperHtml(messageErreur(err))}</span>`;
+            }
+        }
+
+        function demanderLierEmail() {
+            const champ = document.getElementById('compte-email-champ');
+            const email = (champ.value || '').trim();
+            if (!email || !email.includes('@')) {
+                alert('Renseigne une adresse email valide');
+                return;
+            }
+            lierEmail(email);
+        }
+
+        // Affiche l'état du compte (email confirmé, en attente, ou aucun) dans Réglages
+        function afficherStatutCompte() {
+            const zone = document.getElementById('compte-email-info');
+            if (!zone || !currentUser) return;
+            if (currentUser.email) {
+                zone.innerHTML = `<span style="color: var(--success);">✓ Connecté avec ${echapperHtml(currentUser.email)} — accessible depuis n'importe quel appareil.</span>`;
+                const bloc = document.getElementById('compte-email-formulaire');
+                if (bloc) bloc.style.display = 'none';
+            } else {
+                zone.innerHTML = `<span style="color: var(--text-light);">Compte propre à cet appareil pour l'instant. Ajoute ton email pour y accéder aussi depuis ton téléphone, et pour inviter des collaborateurs.</span>`;
+            }
         }
 
         async function creerExploitation() {
@@ -1169,6 +1286,7 @@
                 if (error) throw error;
 
                 currentExploitation = newExploit;
+                monRole = 'admin';
                 document.getElementById('exploitation-name').textContent = currentExploitation.nom;
                 document.getElementById('setup-page').style.display = 'none';
 
@@ -1176,10 +1294,14 @@
                 await chargerParcelles();
                 await chargerProduits();
                 await chargerTraitements();
+                await chargerCollaborateurs();
 
                 afficherMenu();
                 afficherHisto();
                 afficherReglages();
+                afficherCollaborateurs();
+                afficherStatutCompte();
+                appliquerRestrictionsRole();
                 chargerMeteoActuelle();
             } catch (err) {
                 console.error('Erreur création exploitation:', err);
@@ -1481,6 +1603,93 @@
             } catch (err) {
                 console.error('Erreur traitements:', err);
                 traitements = [];
+            }
+        }
+
+        // ===== COLLABORATEURS (admin uniquement) =====
+
+        async function chargerCollaborateurs() {
+            if (monRole !== 'admin') { collaborateurs = []; return; }
+            try {
+                const { data, error } = await supabaseClient
+                    .from('collaborateurs')
+                    .select('*')
+                    .eq('exploitation_id', currentExploitation.id)
+                    .order('email');
+                if (error) throw error;
+                collaborateurs = data || [];
+            } catch (err) {
+                console.error('Erreur chargement collaborateurs:', err);
+                collaborateurs = [];
+            }
+        }
+
+        async function inviterCollaborateur() {
+            if (monRole !== 'admin') return;
+            const champ = document.getElementById('reg-collaborateur-email');
+            const email = (champ.value || '').trim().toLowerCase();
+            if (!email || !email.includes('@')) {
+                alert('Renseigne une adresse email valide');
+                return;
+            }
+            try {
+                const { error } = await supabaseClient
+                    .from('collaborateurs')
+                    .insert([{ exploitation_id: currentExploitation.id, email, role: 'collaborateur' }]);
+                if (error) throw error;
+                champ.value = '';
+                await chargerCollaborateurs();
+                afficherReglages();
+            } catch (err) {
+                const msg = messageErreur(err);
+                if (/duplicate|unique/i.test(msg)) {
+                    alert('Cette personne est déjà invitée sur cette exploitation.');
+                } else {
+                    alert('Erreur: ' + msg);
+                }
+            }
+        }
+
+        async function retirerCollaborateur(id, email) {
+            if (!confirm(`Retirer l'accès de ${email} ?`)) return;
+            try {
+                const { error } = await supabaseClient.from('collaborateurs').delete().eq('id', id);
+                if (error) throw error;
+                await chargerCollaborateurs();
+                afficherReglages();
+            } catch (err) {
+                alert('Erreur: ' + messageErreur(err));
+            }
+        }
+
+        function afficherCollaborateurs() {
+            const zone = document.getElementById('reglages-collaborateurs-list');
+            if (!zone) return;
+            if (collaborateurs.length === 0) {
+                zone.innerHTML = '<p class="empty-note">Aucun collaborateur invité pour l\'instant.</p>';
+                return;
+            }
+            zone.innerHTML = collaborateurs.map(c => `
+                <div class="item-card item-row">
+                    <div>
+                        <strong style="font-size: 13px;">${echapperHtml(c.email)}</strong>
+                        <div style="font-size: 11px; color: var(--text-light); margin-top: 2px;">${c.user_id ? '✓ actif' : '⏳ en attente de première connexion'}</div>
+                    </div>
+                    <button class="btn-icon-delete" title="Retirer" onclick="retirerCollaborateur('${c.id}', '${c.email.replace(/'/g, "\\'")}')">✕</button>
+                </div>
+            `).join('');
+        }
+
+        // Cache/désactive tout ce qui doit rester réservé à l'admin, une fois le rôle connu.
+        function appliquerRestrictionsRole() {
+            const estAdmin = monRole === 'admin';
+            document.querySelectorAll('[data-admin-seulement]').forEach(el => {
+                el.style.display = estAdmin ? '' : 'none';
+            });
+            const noteRole = document.getElementById('reglages-note-role');
+            if (noteRole) {
+                noteRole.style.display = estAdmin ? 'none' : 'block';
+                noteRole.textContent = "Tu es collaborateur sur cette exploitation : tu peux réaliser des traitements et consulter l'historique, mais seul l'administrateur peut modifier les parcelles, les produits ou les informations de l'exploitation.";
             }
         }
 
@@ -2445,7 +2654,7 @@
                             <strong style="font-size: 13px;">${p.nom}</strong>
                             <div style="font-size: 11px; color: var(--text-light); margin-top: 2px;">${p.surface} ha${p.cepage ? ' · 🍃 ' + p.cepage : ''}</div>
                         </div>
-                        <button class="btn-icon-delete" title="Supprimer" onclick="supprimerParcelle('${p.id}', '${p.nom.replace(/'/g, "\\'")}')">✕</button>
+                        ${monRole === 'admin' ? `<button class="btn-icon-delete" title="Supprimer" onclick="supprimerParcelle('${p.id}', '${p.nom.replace(/'/g, "\\'")}')">✕</button>` : ''}
                     </div>
                 `).join('');
             }
@@ -2461,12 +2670,16 @@
                             <strong style="font-size: 13px;">${p.nom}</strong>
                             <div style="font-size: 11px; color: var(--text-light); margin-top: 2px;">${p.dose} ${p.unite || 'L/ha'}${p.exploitation_id ? '' : ' · partagé'}</div>
                         </div>
-                        ${p.exploitation_id ? `<button class="btn-icon-delete" title="Supprimer" onclick="supprimerProduit('${p.id}', '${p.nom.replace(/'/g, "\\'")}')">✕</button>` : ''}
+                        ${(p.exploitation_id && monRole === 'admin') ? `<button class="btn-icon-delete" title="Supprimer" onclick="supprimerProduit('${p.id}', '${p.nom.replace(/'/g, "\\'")}')">✕</button>` : ''}
                     </div>
                 `).join('');
             }
             const rechercheInput = document.getElementById('reglages-produits-recherche');
             if (rechercheInput) filtrerReglagesProduits(rechercheInput.value);
+
+            afficherCollaborateurs();
+            afficherStatutCompte();
+            appliquerRestrictionsRole();
         }
 
         // Filtre en direct la liste de gestion des produits (Réglages)
