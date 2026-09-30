@@ -667,7 +667,28 @@
                 <div class="form-card" id="carte-compte">
                     <h3 style="margin-bottom: 12px;">👤 Mon compte</h3>
                     <div id="compte-email-info" style="font-size: 13px; margin-bottom: 12px;"></div>
+
+                    <!-- Profil personnel : toujours modifiable, quel que soit l'état du compte -->
+                    <div style="margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border);">
+                        <div class="form-group">
+                            <label class="form-label">Prénom</label>
+                            <input type="text" id="profil-prenom" class="form-input" placeholder="Ex: Florian">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Nom</label>
+                            <input type="text" id="profil-nom" class="form-input" placeholder="Ex: Martin">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Date de naissance</label>
+                            <input type="date" id="profil-naissance" class="form-input">
+                        </div>
+                        <button class="btn-submit" style="background: white; color: var(--primary); border: 1.5px solid var(--border);" onclick="enregistrerMonProfil()">✓ Enregistrer mon profil</button>
+                        <div id="profil-statut" style="font-size: 13px; margin-top: 8px;"></div>
+                    </div>
+
+                    <!-- Compte pas encore protégé par mot de passe (ancien compte anonyme) -->
                     <div id="compte-email-formulaire">
+                        <p style="font-size: 12px; color: var(--text-light); margin-bottom: 10px;">Ton compte n'est pas encore protégé par mot de passe. Ajoute-en un pour y accéder depuis un autre appareil et sécuriser tes données.</p>
                         <div class="form-group">
                             <label class="form-label">Email</label>
                             <input type="email" id="compte-email-champ" class="form-input" placeholder="toi@exemple.fr">
@@ -683,6 +704,22 @@
                         <button class="btn-submit" onclick="demanderLierEmail()">🔒 Sécuriser mon compte</button>
                         <div id="compte-email-statut" style="font-size: 13px; margin-top: 10px;"></div>
                     </div>
+
+                    <!-- Compte déjà protégé : changer le mot de passe -->
+                    <div id="compte-changer-mdp" style="display: none;">
+                        <div class="form-group">
+                            <label class="form-label">Nouveau mot de passe (8 caractères minimum)</label>
+                            <input type="password" id="nouveau-mdp-champ" class="form-input" placeholder="••••••••">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Confirmer le nouveau mot de passe</label>
+                            <input type="password" id="nouveau-mdp2-champ" class="form-input" placeholder="••••••••">
+                        </div>
+                        <button class="btn-submit" style="background: white; color: var(--primary); border: 1.5px solid var(--border);" onclick="demanderChangementMdp()">🔑 Changer mon mot de passe</button>
+                        <div id="changer-mdp-statut" style="font-size: 13px; margin-top: 8px;"></div>
+                    </div>
+
+                    <button class="btn-submit" style="background: white; color: #a13b2f; border: 1.5px solid var(--border); margin-top: 16px;" onclick="seDeconnecter()">↪ Se déconnecter</button>
                 </div>
 
                 <div class="form-card" data-admin-seulement>
@@ -1420,13 +1457,78 @@
         function afficherStatutCompte() {
             const zone = document.getElementById('compte-email-info');
             if (!zone || !currentUser) return;
+            const blocSecuriser = document.getElementById('compte-email-formulaire');
+            const blocChangerMdp = document.getElementById('compte-changer-mdp');
             if (currentUser.email) {
                 zone.innerHTML = `<span style="color: var(--success);">✓ Connecté avec ${echapperHtml(currentUser.email)} — accessible depuis n'importe quel appareil.</span>`;
-                const bloc = document.getElementById('compte-email-formulaire');
-                if (bloc) bloc.style.display = 'none';
+                if (blocSecuriser) blocSecuriser.style.display = 'none';
+                if (blocChangerMdp) blocChangerMdp.style.display = 'block';
             } else {
                 zone.innerHTML = `<span style="color: var(--text-light);">Compte propre à cet appareil pour l'instant. Ajoute ton email pour y accéder aussi depuis ton téléphone, et pour inviter des collaborateurs.</span>`;
+                if (blocSecuriser) blocSecuriser.style.display = 'block';
+                if (blocChangerMdp) blocChangerMdp.style.display = 'none';
             }
+            chargerMonProfil();
+        }
+
+        async function chargerMonProfil() {
+            if (!currentUser) return;
+            const champPrenom = document.getElementById('profil-prenom');
+            const champNom = document.getElementById('profil-nom');
+            const champNaissance = document.getElementById('profil-naissance');
+            if (!champPrenom) return;
+            // Ne jamais écraser un champ en cours de frappe
+            if ([champPrenom, champNom, champNaissance].includes(document.activeElement)) return;
+            try {
+                const { data } = await supabaseClient.from('profiles').select('*').eq('id', currentUser.id).single();
+                if (data) {
+                    champPrenom.value = data.prenom || '';
+                    champNom.value = data.nom || '';
+                    champNaissance.value = data.date_naissance || '';
+                }
+            } catch (err) {
+                // Pas encore de profil enregistré pour ce compte : rien à afficher, normal.
+            }
+        }
+
+        async function enregistrerMonProfil() {
+            if (!currentUser) return;
+            const prenom = document.getElementById('profil-prenom').value.trim();
+            const nom = document.getElementById('profil-nom').value.trim();
+            const naissance = document.getElementById('profil-naissance').value || null;
+            const statut = document.getElementById('profil-statut');
+            try {
+                const { error } = await supabaseClient
+                    .from('profiles')
+                    .upsert({ id: currentUser.id, prenom: prenom || null, nom: nom || null, date_naissance: naissance }, { onConflict: 'id' });
+                if (error) throw error;
+                statut.innerHTML = '<span style="color: var(--success);">✓ Profil enregistré</span>';
+            } catch (err) {
+                statut.innerHTML = `<span style="color: #a13b2f;">Erreur : ${echapperHtml(messageErreur(err))}</span>`;
+            }
+        }
+
+        async function demanderChangementMdp() {
+            const password = document.getElementById('nouveau-mdp-champ').value;
+            const password2 = document.getElementById('nouveau-mdp2-champ').value;
+            const statut = document.getElementById('changer-mdp-statut');
+            if (!password || password.length < 8) { alert('Le mot de passe doit faire au moins 8 caractères'); return; }
+            if (password !== password2) { alert('Les deux mots de passe ne correspondent pas'); return; }
+            try {
+                const { error } = await supabaseClient.auth.updateUser({ password });
+                if (error) throw error;
+                document.getElementById('nouveau-mdp-champ').value = '';
+                document.getElementById('nouveau-mdp2-champ').value = '';
+                statut.innerHTML = '<span style="color: var(--success);">✓ Mot de passe changé</span>';
+            } catch (err) {
+                statut.innerHTML = `<span style="color: #a13b2f;">Erreur : ${echapperHtml(messageErreur(err))}</span>`;
+            }
+        }
+
+        async function seDeconnecter() {
+            if (!confirm('Te déconnecter de PhytoLog sur cet appareil ?')) return;
+            await supabaseClient.auth.signOut();
+            location.reload();
         }
 
         async function mettreAJourExploitation() {
