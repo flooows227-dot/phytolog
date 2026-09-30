@@ -417,33 +417,88 @@
                 <path class="mark-check" d="M45 76 L49 80 L57 70" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
             <h1 class="auth-title">Bienvenue sur PhytoLog</h1>
-            <p class="auth-subtitle">Crée ton exploitation pour commencer</p>
-            <div class="form-group" style="text-align: left;">
-                <label class="form-label">Nom de l'exploitation</label>
-                <input type="text" id="setup-nom" class="form-input" placeholder="Ex: Domaine du Clos">
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 20px;">
+                <button type="button" class="nav-btn active" id="onglet-creation" onclick="afficherOngletSetup('creation')">Créer mon compte</button>
+                <button type="button" class="nav-btn" id="onglet-connexion" onclick="afficherOngletSetup('connexion')">Se connecter</button>
             </div>
-            <div class="form-group" style="text-align: left;">
-                <label class="form-label">Ville</label>
-                <input type="text" id="setup-region" class="form-input" placeholder="Ex: Cotignac">
+
+            <!-- ---- CRÉATION DE COMPTE ---- -->
+            <div id="panneau-creation">
+                <p class="auth-subtitle">Un compte protégé par mot de passe, puis ton exploitation</p>
+
+                <div class="form-group" style="text-align: left;">
+                    <label class="form-label">Prénom</label>
+                    <input type="text" id="setup-prenom" class="form-input" placeholder="Ex: Florian">
+                </div>
+                <div class="form-group" style="text-align: left;">
+                    <label class="form-label">Nom</label>
+                    <input type="text" id="setup-nomperso" class="form-input" placeholder="Ex: Martin">
+                </div>
+                <div class="form-group" style="text-align: left;">
+                    <label class="form-label">Date de naissance (optionnel)</label>
+                    <input type="date" id="setup-naissance" class="form-input">
+                </div>
+                <div class="form-group" style="text-align: left;">
+                    <label class="form-label">Email</label>
+                    <input type="email" id="setup-email" class="form-input" placeholder="toi@exemple.fr">
+                </div>
+                <div class="form-group" style="text-align: left;">
+                    <label class="form-label">Mot de passe (8 caractères minimum)</label>
+                    <input type="password" id="setup-password" class="form-input" placeholder="••••••••">
+                </div>
+                <div class="form-group" style="text-align: left;">
+                    <label class="form-label">Confirmer le mot de passe</label>
+                    <input type="password" id="setup-password2" class="form-input" placeholder="••••••••">
+                </div>
+
+                <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
+                    <div class="form-group" style="text-align: left;">
+                        <label class="form-label">Nom de l'exploitation</label>
+                        <input type="text" id="setup-nom" class="form-input" placeholder="Ex: Domaine du Clos">
+                    </div>
+                    <div class="form-group" style="text-align: left;">
+                        <label class="form-label">Ville</label>
+                        <input type="text" id="setup-region" class="form-input" placeholder="Ex: Cotignac">
+                    </div>
+                    <div class="form-group" style="text-align: left;">
+                        <label class="form-label">Code postal</label>
+                        <input type="text" id="setup-cp" class="form-input" inputmode="numeric" maxlength="5" placeholder="Ex: 83570">
+                    </div>
+                    <div class="form-group" style="text-align: left;">
+                        <button type="button" class="btn-submit" style="background: white; color: var(--primary); border: 1.5px solid var(--border);" onclick="localiserSetupGPS()">📍 Me localiser (GPS)</button>
+                        <div id="setup-gps-statut" style="font-size: 12px; color: var(--text-light); margin-top: 6px;">Optionnel : plus précis que la ville, utile si tu es sur ton exploitation.</div>
+                    </div>
+                    <div class="form-group" style="text-align: left;">
+                        <label class="form-label">Surface totale (ha, optionnel)</label>
+                        <input type="number" id="setup-surface" class="form-input" step="0.1" placeholder="Ex: 19.5">
+                    </div>
+                </div>
+
+                <!-- Piège anti-spam (honeypot) : invisible pour un humain, souvent rempli par les robots -->
+                <div style="position: absolute; left: -9999px; top: -9999px;" aria-hidden="true">
+                    <label for="setup-website">Laisser vide</label>
+                    <input type="text" id="setup-website" name="website" tabindex="-1" autocomplete="off">
+                </div>
+                <button class="btn-submit" id="btn-setup" onclick="creerCompteEtExploitation()">✓ Créer mon compte et mon exploitation</button>
+                <div id="setup-statut" style="font-size: 13px; margin-top: 10px;"></div>
             </div>
-            <div class="form-group" style="text-align: left;">
-                <label class="form-label">Code postal</label>
-                <input type="text" id="setup-cp" class="form-input" inputmode="numeric" maxlength="5" placeholder="Ex: 83570">
+
+            <!-- ---- CONNEXION ---- -->
+            <div id="panneau-connexion" style="display: none;">
+                <p class="auth-subtitle">Déjà un compte, ou invité par un admin ?</p>
+                <div class="form-group" style="text-align: left;">
+                    <label class="form-label">Email</label>
+                    <input type="email" id="connexion-email" class="form-input" placeholder="toi@exemple.fr">
+                </div>
+                <div class="form-group" style="text-align: left;">
+                    <label class="form-label">Mot de passe</label>
+                    <input type="password" id="connexion-password" class="form-input" placeholder="••••••••">
+                </div>
+                <button class="btn-submit" id="btn-connexion" onclick="seConnecterMotDePasse()">Se connecter</button>
+                <a href="#" onclick="demanderReinitialisationMdp(); return false;" style="display: block; text-align: center; margin-top: 12px; font-size: 13px; color: var(--primary); font-weight: 600;">Mot de passe oublié ?</a>
+                <div id="connexion-statut" style="font-size: 13px; margin-top: 10px;"></div>
             </div>
-            <div class="form-group" style="text-align: left;">
-                <button type="button" class="btn-submit" style="background: white; color: var(--primary); border: 1.5px solid var(--border);" onclick="localiserSetupGPS()">📍 Me localiser (GPS)</button>
-                <div id="setup-gps-statut" style="font-size: 12px; color: var(--text-light); margin-top: 6px;">Optionnel : plus précis que la ville, utile si tu es sur ton exploitation.</div>
-            </div>
-            <div class="form-group" style="text-align: left;">
-                <label class="form-label">Surface totale (ha, optionnel)</label>
-                <input type="number" id="setup-surface" class="form-input" step="0.1" placeholder="Ex: 19.5">
-            </div>
-            <!-- Piège anti-spam (honeypot) : invisible pour un humain, souvent rempli par les robots -->
-            <div style="position: absolute; left: -9999px; top: -9999px;" aria-hidden="true">
-                <label for="setup-website">Laisser vide</label>
-                <input type="text" id="setup-website" name="website" tabindex="-1" autocomplete="off">
-            </div>
-            <button class="btn-submit" id="btn-setup" onclick="creerExploitation()">✓ Créer mon exploitation</button>
         </div>
     </div>
 
@@ -617,7 +672,15 @@
                             <label class="form-label">Email</label>
                             <input type="email" id="compte-email-champ" class="form-input" placeholder="toi@exemple.fr">
                         </div>
-                        <button class="btn-submit" onclick="demanderLierEmail()">📧 Ajouter mon email</button>
+                        <div class="form-group">
+                            <label class="form-label">Mot de passe (8 caractères minimum)</label>
+                            <input type="password" id="compte-password-champ" class="form-input" placeholder="••••••••">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Confirmer le mot de passe</label>
+                            <input type="password" id="compte-password2-champ" class="form-input" placeholder="••••••••">
+                        </div>
+                        <button class="btn-submit" onclick="demanderLierEmail()">🔒 Sécuriser mon compte</button>
                         <div id="compte-email-statut" style="font-size: 13px; margin-top: 10px;"></div>
                     </div>
                 </div>
@@ -778,26 +841,16 @@
         // Note: les produits et parcelles sont désormais gérés par exploitation
         // via l'onglet Réglages, plus de liste figée imposée à tous les comptes.
 
-        // ===== 1. IDENTITÉ UTILISATEUR (connexion anonyme Supabase) =====
-        // Contrairement à l'ancien système (identifiant local non vérifiable), cette identité
-        // est délivrée et vérifiée par Supabase : les règles de sécurité (RLS) peuvent s'appuyer
-        // dessus en toute confiance. Aucun écran de login pour autant — 100% invisible pour l'utilisateur.
+        // ===== 1. IDENTITÉ UTILISATEUR =====
+        // Chaque compte est désormais protégé par email + mot de passe (créé via
+        // creerCompteEtExploitation ou seConnecterMotDePasse). On ne crée plus de compte
+        // anonyme pour un nouveau visiteur : s'il n'a pas de session, direction l'écran
+        // de création de compte / connexion. Les comptes anonymes créés avant ce changement
+        // continuent de fonctionner normalement (getSession() les retrouve comme avant) et
+        // peuvent être sécurisés à tout moment via Réglages → Mon compte.
         async function getOrCreateUser() {
             const { data: { session } } = await supabaseClient.auth.getSession();
-            if (session && session.user) {
-                return session.user;
-            }
-            if (typeof supabaseClient.auth.signInAnonymously !== 'function') {
-                throw new Error('La librairie Supabase chargée ne supporte pas la connexion anonyme. Vérifie ta connexion internet et recharge la page.');
-            }
-            const { data, error } = await supabaseClient.auth.signInAnonymously();
-            if (error) {
-                if (/anonymous/i.test(error.message || '')) {
-                    throw new Error('La connexion anonyme n\'est pas activée sur ce projet Supabase. Va dans Authentication → Sign In / Providers → active "Allow anonymous sign-ins".');
-                }
-                throw error;
-            }
-            return data.user;
+            return (session && session.user) ? session.user : null;
         }
 
         // Rend n'importe quelle erreur lisible (évite le fameux "[object Object]")
@@ -810,30 +863,23 @@
             try {
                 currentUser = await getOrCreateUser();
 
-                const exploitationExistante = await verifierExploitationExistante();
-
-                if (!exploitationExistante) {
-                    // Nouvel utilisateur : on lui demande de créer son exploitation
+                if (!currentUser) {
+                    // Personne connectée : écran de création de compte / connexion
                     document.getElementById('loading-page').style.display = 'none';
                     document.getElementById('setup-page').style.display = 'flex';
                     return;
                 }
 
-                afficherAppPrincipale();
-                await chargerParcelles();
-                await chargerProduits();
-                await chargerTraitements();
-                await chargerCollaborateurs();
+                const exploitationExistante = await verifierExploitationExistante();
 
-                afficherMenu();
-                afficherHisto();
-                afficherReglages();
-                afficherCollaborateurs();
-                afficherStatutCompte();
-                appliquerRestrictionsRole();
-                afficherBrouillonAccueil();
-                afficherFileAttente();
-                envoyerFileAttente();
+                if (!exploitationExistante) {
+                    // Compte connecté mais sans exploitation (rare : invitation retirée, etc.)
+                    document.getElementById('loading-page').style.display = 'none';
+                    document.getElementById('setup-page').style.display = 'flex';
+                    return;
+                }
+
+                await demarrerApresConnexion();
             } catch (err) {
                 console.error('Erreur initialisation:', err);
                 document.getElementById('loading-page').innerHTML = `
@@ -1195,28 +1241,179 @@
             return true;
         }
 
-        // Attache un email au compte actuel (qu'il soit anonyme ou déjà collaborateur) : envoie
-        // un lien de confirmation par email. Aucune donnée n'est perdue ni dupliquée — c'est le
-        // MÊME compte qui reçoit simplement un email, il ne change pas d'identifiant.
-        async function lierEmail(email) {
+        function afficherOngletSetup(nom) {
+            document.getElementById('panneau-creation').style.display = nom === 'creation' ? 'block' : 'none';
+            document.getElementById('panneau-connexion').style.display = nom === 'connexion' ? 'block' : 'none';
+            document.getElementById('onglet-creation').classList[nom === 'creation' ? 'add' : 'remove']('active');
+            document.getElementById('onglet-connexion').classList[nom === 'connexion' ? 'add' : 'remove']('active');
+        }
+
+        // Regroupe tout ce qu'il faut faire une fois qu'on a une session authentifiée ET une
+        // exploitation trouvée — utilisé après la connexion, après la création de compte, et
+        // au chargement normal de l'app (initialiserApp). Un seul endroit à tenir à jour.
+        async function demarrerApresConnexion() {
+            afficherAppPrincipale();
+            await chargerParcelles();
+            await chargerProduits();
+            await chargerTraitements();
+            await chargerCollaborateurs();
+
+            afficherMenu();
+            afficherHisto();
+            afficherReglages();
+            afficherCollaborateurs();
+            afficherStatutCompte();
+            appliquerRestrictionsRole();
+            afficherBrouillonAccueil();
+            afficherFileAttente();
+            envoyerFileAttente();
+        }
+
+        // ---- Création de compte (mot de passe) + exploitation ----
+        async function creerCompteEtExploitation() {
+            const honeypot = document.getElementById('setup-website').value;
+            if (honeypot) { console.warn('Soumission bloquée (honeypot rempli)'); return; }
+
+            const prenom = document.getElementById('setup-prenom').value.trim();
+            const nomPerso = document.getElementById('setup-nomperso').value.trim();
+            const naissance = document.getElementById('setup-naissance').value || null;
+            const email = document.getElementById('setup-email').value.trim();
+            const password = document.getElementById('setup-password').value;
+            const password2 = document.getElementById('setup-password2').value;
+            const nom = document.getElementById('setup-nom').value.trim();
+            const region = document.getElementById('setup-region').value.trim();
+            const codePostal = document.getElementById('setup-cp').value.trim();
+            const surfaceRaw = document.getElementById('setup-surface').value;
+            const statut = document.getElementById('setup-statut');
+
+            if (!email || !email.includes('@')) { alert('Renseigne une adresse email valide'); return; }
+            if (!password || password.length < 8) { alert('Le mot de passe doit faire au moins 8 caractères'); return; }
+            if (password !== password2) { alert('Les deux mots de passe ne correspondent pas'); return; }
+            if (!nom) { alert('Le nom de l\'exploitation est obligatoire'); document.getElementById('setup-nom').focus(); return; }
+            if (codePostal && !/^\d{5}$/.test(codePostal)) { alert('Le code postal doit comporter 5 chiffres (ou laisse le champ vide)'); return; }
+            if (surfaceRaw && (isNaN(parseFloat(surfaceRaw)) || parseFloat(surfaceRaw) <= 0)) { alert('La surface doit être un nombre supérieur à 0 (ou laisse le champ vide)'); return; }
+
+            const bouton = document.getElementById('btn-setup');
+            bouton.disabled = true;
+            statut.textContent = '';
+            try {
+                const { data, error } = await supabaseClient.auth.signUp({ email, password });
+                if (error) throw error;
+
+                if (!data.session) {
+                    // La confirmation par email est activée côté Supabase : pas de session tout de
+                    // suite. On ne peut rien créer tant que ce n'est pas confirmé.
+                    statut.innerHTML = `<span style="color: var(--success);">✓ Compte créé ! Vérifie ta boîte mail, clique le lien de confirmation, puis reviens ici et connecte-toi (onglet "Se connecter") pour créer ton exploitation.</span>`;
+                    bouton.disabled = false;
+                    return;
+                }
+
+                currentUser = data.user;
+
+                await supabaseClient.from('profiles').insert([{ id: currentUser.id, prenom: prenom || null, nom: nomPerso || null, date_naissance: naissance }]);
+
+                // Cet email avait-il déjà une invitation en attente (posée par un admin) ?
+                // Si oui, on rejoint SON exploitation plutôt que d'en créer une nouvelle —
+                // même si les champs exploitation du formulaire ont été remplis par erreur.
+                const dejaCollaborateur = await verifierExploitationExistante();
+                if (dejaCollaborateur) {
+                    document.getElementById('setup-page').style.display = 'none';
+                    await demarrerApresConnexion();
+                    return;
+                }
+
+                const coords = positionGPSSetup || await geocoderLocalisation(region, codePostal);
+                const { data: newExploit, error: erreurExploit } = await supabaseClient
+                    .from('exploitations')
+                    .insert([{
+                        nom, region: region || null, code_postal: codePostal || null,
+                        surface_totale: surfaceRaw ? parseFloat(surfaceRaw) : null,
+                        admin_id: currentUser.id,
+                        latitude: coords ? coords.latitude : null,
+                        longitude: coords ? coords.longitude : null
+                    }])
+                    .select().single();
+                if (erreurExploit) throw erreurExploit;
+
+                currentExploitation = newExploit;
+                monRole = 'admin';
+                document.getElementById('exploitation-name').textContent = currentExploitation.nom;
+                document.getElementById('setup-page').style.display = 'none';
+                await demarrerApresConnexion();
+                chargerMeteoActuelle();
+            } catch (err) {
+                statut.innerHTML = `<span style="color: #a13b2f;">Erreur : ${echapperHtml(messageErreur(err))}</span>`;
+                bouton.disabled = false;
+            }
+        }
+
+        // ---- Connexion (mot de passe) ----
+        async function seConnecterMotDePasse() {
+            const email = document.getElementById('connexion-email').value.trim();
+            const password = document.getElementById('connexion-password').value;
+            const statut = document.getElementById('connexion-statut');
+            if (!email || !password) { alert('Renseigne ton email et ton mot de passe'); return; }
+
+            const bouton = document.getElementById('btn-connexion');
+            bouton.disabled = true;
+            statut.textContent = '';
+            try {
+                const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+                if (error) throw error;
+                currentUser = data.user;
+
+                const exploitationExistante = await verifierExploitationExistante();
+                if (!exploitationExistante) {
+                    statut.innerHTML = `<span style="color: #a13b2f;">Connecté, mais aucune exploitation trouvée pour ce compte. Si tu attends une invitation, vérifie l'adresse avec ton administrateur.</span>`;
+                    bouton.disabled = false;
+                    return;
+                }
+                document.getElementById('setup-page').style.display = 'none';
+                await demarrerApresConnexion();
+            } catch (err) {
+                statut.innerHTML = `<span style="color: #a13b2f;">Erreur : ${echapperHtml(messageErreur(err))}</span>`;
+                bouton.disabled = false;
+            }
+        }
+
+        async function demanderReinitialisationMdp() {
+            const email = (document.getElementById('connexion-email').value || '').trim();
+            const statut = document.getElementById('connexion-statut');
+            if (!email || !email.includes('@')) {
+                alert('Renseigne ton email dans le champ ci-dessus, puis clique à nouveau sur ce lien.');
+                return;
+            }
+            try {
+                const { error } = await supabaseClient.auth.resetPasswordForEmail(email);
+                if (error) throw error;
+                statut.innerHTML = `<span style="color: var(--success);">✓ Email envoyé à ${echapperHtml(email)} pour choisir un nouveau mot de passe.</span>`;
+            } catch (err) {
+                statut.innerHTML = `<span style="color: #a13b2f;">Erreur : ${echapperHtml(messageErreur(err))}</span>`;
+            }
+        }
+
+        // ---- Sécuriser un compte anonyme existant (Réglages → Mon compte) ----
+        // Pour quelqu'un qui a DÉJÀ des données (exploitation créée avant l'ajout des comptes) :
+        // on ajoute email + mot de passe SANS changer d'identifiant, donc sans rien perdre.
+        async function lierEmail(email, password) {
             const statut = document.getElementById('compte-email-statut');
             try {
-                const { error } = await supabaseClient.auth.updateUser({ email });
+                const { error } = await supabaseClient.auth.updateUser({ email, password });
                 if (error) throw error;
-                if (statut) statut.innerHTML = `<span style="color: var(--success);">✓ Email envoyé à ${echapperHtml(email)} — clique sur le lien reçu pour confirmer.</span>`;
+                if (statut) statut.innerHTML = `<span style="color: var(--success);">✓ Compte sécurisé. Vérifie ta boîte mail pour confirmer ${echapperHtml(email)}.</span>`;
             } catch (err) {
                 if (statut) statut.innerHTML = `<span style="color: #a13b2f;">Erreur : ${echapperHtml(messageErreur(err))}</span>`;
             }
         }
 
         function demanderLierEmail() {
-            const champ = document.getElementById('compte-email-champ');
-            const email = (champ.value || '').trim();
-            if (!email || !email.includes('@')) {
-                alert('Renseigne une adresse email valide');
-                return;
-            }
-            lierEmail(email);
+            const email = (document.getElementById('compte-email-champ').value || '').trim();
+            const password = document.getElementById('compte-password-champ').value;
+            const password2 = document.getElementById('compte-password2-champ').value;
+            if (!email || !email.includes('@')) { alert('Renseigne une adresse email valide'); return; }
+            if (!password || password.length < 8) { alert('Le mot de passe doit faire au moins 8 caractères'); return; }
+            if (password !== password2) { alert('Les deux mots de passe ne correspondent pas'); return; }
+            lierEmail(email, password);
         }
 
         // Affiche l'état du compte (email confirmé, en attente, ou aucun) dans Réglages
@@ -1229,84 +1426,6 @@
                 if (bloc) bloc.style.display = 'none';
             } else {
                 zone.innerHTML = `<span style="color: var(--text-light);">Compte propre à cet appareil pour l'instant. Ajoute ton email pour y accéder aussi depuis ton téléphone, et pour inviter des collaborateurs.</span>`;
-            }
-        }
-
-        async function creerExploitation() {
-            // Anti-spam : si ce champ invisible est rempli, c'est un robot — on ne fait rien,
-            // silencieusement, comme si la création avait échoué normalement.
-            const honeypot = document.getElementById('setup-website').value;
-            if (honeypot) {
-                console.warn('Soumission bloquée (honeypot rempli)');
-                return;
-            }
-
-            const nom = document.getElementById('setup-nom').value.trim();
-            const region = document.getElementById('setup-region').value.trim();
-            const codePostal = document.getElementById('setup-cp').value.trim();
-            const surfaceRaw = document.getElementById('setup-surface').value;
-
-            if (!nom) {
-                alert('Le nom de l\'exploitation est obligatoire');
-                document.getElementById('setup-nom').focus();
-                return;
-            }
-            if (codePostal && !/^\d{5}$/.test(codePostal)) {
-                alert('Le code postal doit comporter 5 chiffres (ou laisse le champ vide)');
-                document.getElementById('setup-cp').focus();
-                return;
-            }
-            if (surfaceRaw && (isNaN(parseFloat(surfaceRaw)) || parseFloat(surfaceRaw) <= 0)) {
-                alert('La surface doit être un nombre supérieur à 0 (ou laisse le champ vide)');
-                document.getElementById('setup-surface').focus();
-                return;
-            }
-
-            try {
-                document.getElementById('btn-setup').disabled = true;
-
-                // La position GPS (si l'utilisateur a cliqué "Me localiser") est prioritaire ;
-                // sinon on localise à partir de la ville et du code postal.
-                const coords = positionGPSSetup || await geocoderLocalisation(region, codePostal);
-
-                const { data: newExploit, error } = await supabaseClient
-                    .from('exploitations')
-                    .insert([{
-                        nom,
-                        region: region || null,
-                        code_postal: codePostal || null,
-                        surface_totale: surfaceRaw ? parseFloat(surfaceRaw) : null,
-                        admin_id: currentUser.id,
-                        latitude: coords ? coords.latitude : null,
-                        longitude: coords ? coords.longitude : null
-                    }])
-                    .select()
-                    .single();
-
-                if (error) throw error;
-
-                currentExploitation = newExploit;
-                monRole = 'admin';
-                document.getElementById('exploitation-name').textContent = currentExploitation.nom;
-                document.getElementById('setup-page').style.display = 'none';
-
-                afficherAppPrincipale();
-                await chargerParcelles();
-                await chargerProduits();
-                await chargerTraitements();
-                await chargerCollaborateurs();
-
-                afficherMenu();
-                afficherHisto();
-                afficherReglages();
-                afficherCollaborateurs();
-                afficherStatutCompte();
-                appliquerRestrictionsRole();
-                chargerMeteoActuelle();
-            } catch (err) {
-                console.error('Erreur création exploitation:', err);
-                alert('Erreur: ' + messageErreur(err));
-                document.getElementById('btn-setup').disabled = false;
             }
         }
 
@@ -1644,6 +1763,8 @@
                 const msg = messageErreur(err);
                 if (/duplicate|unique/i.test(msg)) {
                     alert('Cette personne est déjà invitée sur cette exploitation.');
+                } else if (/limite de collaborateurs/i.test(msg)) {
+                    alert('Tu as atteint la limite de collaborateurs de ta formule actuelle (' + (currentExploitation.nb_collaborateurs_max || 1) + ' maximum). Contacte-nous pour passer à une formule supérieure.');
                 } else {
                     alert('Erreur: ' + msg);
                 }
