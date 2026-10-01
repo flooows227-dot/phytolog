@@ -19,93 +19,112 @@
     <meta name="twitter:title" content="PhytoLog — Suivi des traitements phytosanitaires">
     <meta name="twitter:description" content="Préparation de bouillie, pulvérisation en direct, historique et cahier de traçabilité, pour la viticulture.">
     <meta name="twitter:image" content="https://phytolog.vercel.app/og-image.png">
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath fill='%232d5016' d='M50 8 C30 10 20 28 30 46 C38 40 46 30 50 8 Z'/%3E%3Cpath fill='%232d5016' d='M50 8 C70 10 80 28 70 46 C62 40 54 30 50 8 Z'/%3E%3Cline x1='50' y1='8' x2='50' y2='46' stroke='%232d5016' stroke-width='3'/%3E%3Ccircle fill='%23b8860b' cx='38' cy='52' r='9'/%3E%3Ccircle fill='%23b8860b' cx='62' cy='52' r='9'/%3E%3Ccircle fill='%23b8860b' cx='50' cy='60' r='9'/%3E%3Ccircle fill='%23b8860b' cx='30' cy='68' r='8'/%3E%3Ccircle fill='%23b8860b' cx='50' cy='76' r='8'/%3E%3Ccircle fill='%23b8860b' cx='70' cy='68' r='8'/%3E%3C/svg%3E">
+    <link rel="icon" type="image/png" href="./favicon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.460.0/dist/umd/lucide.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         :root {
-            --primary: #2d5016;
-            --accent: #b8860b;
-            --light-bg: #f8f6f1;
-            --border: #e8e3d8;
-            --text-dark: #2c2c2c;
-            --text-light: #6b6b6b;
-            --success: #4a7c2f;
-            /* Variantes d'opacité des MÊMES couleurs, pour la profondeur visuelle */
-            --primary-wash: rgba(45, 80, 22, 0.06);
-            --primary-wash-strong: rgba(45, 80, 22, 0.12);
-            --accent-wash: rgba(184, 134, 11, 0.12);
-            --shadow-sm: 0 1px 3px rgba(44, 44, 44, 0.08);
-            --shadow-md: 0 4px 16px rgba(44, 44, 44, 0.10);
-            --radius: 14px;
+            /* ---- Palette PhytoLog ---- */
+            --primary: #28551F;        /* vert profond — actions, navigation active, titres */
+            --secondary: #6F8F3D;      /* vert olive — niveau secondaire, succès */
+            --sauge: #A7B58A;          /* vert sauge — informations tertiaires, bordures de contenu */
+            --beige: #D8C9A8;         /* beige/sable — fonds discrets, badges */
+            --bg: #F7F5EF;            /* ivoire/crème — fond général */
+            --white: #FFFFFF;
+            --text: #263026;          /* texte principal */
+            --text-muted: #5B6B55;    /* texte secondaire, dérivé de la palette (pas un gris neutre) */
+            --bordeaux: #6B2737;      /* accent secondaire discret (vin) — danger / suppression uniquement */
+            --warning: #A8733A;       /* ocre discret — attention */
+            --border: #E3DAC8;        /* dérivé du beige, pour les séparations fines */
+
+            /* Variantes d'opacité des MÊMES couleurs, pour la profondeur (jamais de nouvelle teinte) */
+            --primary-wash: rgba(40, 85, 31, 0.07);
+            --primary-wash-strong: rgba(40, 85, 31, 0.14);
+            --bordeaux-wash: rgba(107, 39, 55, 0.08);
+
+            --shadow-sm: 0 1px 2px rgba(38, 48, 38, 0.06);
+            --shadow-md: 0 3px 10px rgba(38, 48, 38, 0.08);
+            --radius-sm: 8px;
+            --radius: 12px;
+            --radius-lg: 16px;
+
+            /* Alias de compatibilité (anciens noms de variable encore utilisés en style inline) */
+            --light-bg: var(--bg);
+            --text-dark: var(--text);
+            --text-light: var(--text-muted);
+            --accent: var(--warning);
+            --success: var(--secondary);
         }
         html, body {
             width: 100%;
             height: 100%;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: var(--light-bg);
-            color: var(--text-dark);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
             -webkit-font-smoothing: antialiased;
+            font-size: 15px;
+            line-height: 1.45;
         }
         body {
             display: flex;
             flex-direction: column;
             padding-top: env(safe-area-inset-top, 0px);
         }
+        h1, h2, h3 { font-weight: 700; letter-spacing: -0.1px; }
+        .icon { width: 18px; height: 18px; stroke-width: 2; flex-shrink: 0; vertical-align: -4px; }
+        .icon-sm { width: 15px; height: 15px; stroke-width: 2.2; }
+        .icon-lg { width: 26px; height: 26px; stroke-width: 1.75; }
 
         /* ===== LOGO ===== */
-        .mark-leaf { fill: var(--primary); }
-        .mark-stem { stroke: var(--primary); stroke-width: 3; stroke-linecap: round; }
-        .mark-grape { fill: var(--accent); }
-        .mark-check { stroke: white; }
-        .logo-mark-sm { width: 34px; height: 34px; flex-shrink: 0; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.15)); }
-        .logo-mark-lg { width: 76px; height: 76px; margin: 0 auto 16px; display: block; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.12)); }
+        .logo-mark-sm { height: 32px; width: auto; flex-shrink: 0; display: block; }
+        .logo-mark-lg { height: 96px; width: auto; margin: 0 auto 16px; display: block; }
 
         /* ===== HEADER ===== */
         .header {
             background: var(--primary);
-            color: white;
-            padding: 14px 16px;
-            box-shadow: var(--shadow-md);
+            color: var(--white);
+            padding: 12px 16px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             position: relative;
             z-index: 2;
         }
-        .brand { display: flex; align-items: center; gap: 10px; }
-        .brand-text { display: flex; flex-direction: column; line-height: 1.25; }
-        .logo { font-size: 20px; font-weight: 800; letter-spacing: 0.2px; }
-        .tagline { font-size: 11px; opacity: 0.8; font-weight: 500; letter-spacing: 0.2px; }
+        .brand { display: flex; align-items: center; gap: 9px; }
+        .brand-text { display: flex; flex-direction: column; line-height: 1.2; }
+        .logo { font-size: 17px; font-weight: 700; letter-spacing: -0.1px; }
+        .tagline { font-size: 10.5px; opacity: 0.75; font-weight: 500; }
         .header-right { display: flex; gap: 8px; align-items: center; }
         .exploit-badge {
-            background: rgba(255,255,255,0.16);
-            border: 1px solid rgba(255,255,255,0.28);
-            color: white;
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 12px;
+            background: rgba(255,255,255,0.14);
+            color: var(--white);
+            padding: 5px 11px;
+            border-radius: var(--radius-sm);
+            font-size: 11.5px;
             font-weight: 600;
-            letter-spacing: 0.2px;
             white-space: nowrap;
         }
         .exploit-badge:empty { display: none; }
         .btn-logout {
-            padding: 8px 12px;
-            background: rgba(255,255,255,0.2);
-            color: white;
-            border: 1px solid rgba(255,255,255,0.4);
-            border-radius: 4px;
-            font-size: 12px;
+            padding: 7px 11px;
+            background: transparent;
+            color: var(--white);
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: var(--radius-sm);
+            font-size: 11.5px;
             cursor: pointer;
         }
-        .btn-logout:hover { background: rgba(255,255,255,0.3); }
+        .btn-logout:hover { background: rgba(255,255,255,0.12); }
 
-        /* ===== NAV ===== */
+        /* ===== NAV — barre d'onglets desktop / sous-onglets ===== */
         .nav-tabs {
             display: flex;
-            gap: 6px;
-            background: white;
+            gap: 4px;
+            background: var(--white);
             padding: 8px;
             overflow-x: auto;
             flex-shrink: 0;
@@ -113,69 +132,106 @@
         }
         .nav-btn {
             flex-shrink: 0;
-            padding: 9px 15px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
             border: 1px solid transparent;
             background: transparent;
-            color: var(--text-light);
+            color: var(--text-muted);
             font-size: 13px;
             font-weight: 600;
-            border-radius: 20px;
+            font-family: inherit;
+            border-radius: var(--radius-sm);
             cursor: pointer;
-            transition: background 0.18s ease, color 0.18s ease, transform 0.1s ease;
+            transition: background 0.15s ease, color 0.15s ease;
             white-space: nowrap;
         }
         .nav-btn:hover { background: var(--primary-wash); color: var(--primary); }
-        .nav-btn.active {
-            background: var(--primary);
-            color: white;
-            box-shadow: var(--shadow-sm);
+        .nav-btn.active { background: var(--primary); color: var(--white); }
+        .nav-btn:active { transform: scale(0.97); }
+
+        /* ===== NAV MOBILE — barre fixe en bas ===== */
+        .bottom-nav {
+            display: none;
+            position: fixed;
+            left: 0; right: 0; bottom: 0;
+            background: var(--white);
+            border-top: 1px solid var(--border);
+            padding: 6px 4px calc(6px + env(safe-area-inset-bottom, 0px));
+            z-index: 10;
         }
-        .nav-btn:active { transform: scale(0.96); }
+        .bottom-nav-inner { display: flex; }
+        .bottom-nav-btn {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3px;
+            padding: 6px 2px;
+            background: none;
+            border: none;
+            font-family: inherit;
+            color: var(--text-muted);
+            font-size: 10.5px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .bottom-nav-btn.active { color: var(--primary); }
+        .bottom-nav-btn:active { opacity: 0.6; }
 
         .main-content {
             flex: 1;
             overflow-y: auto;
             padding: 14px;
         }
-        .section { display: none; animation: fadeIn 0.25s ease; }
+        .section { display: none; animation: fadeIn 0.2s ease; }
         .section.active { display: block; }
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(4px); }
+            from { opacity: 0; transform: translateY(3px); }
             to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (max-width: 680px) {
+            .nav-tabs { display: none; }
+            .bottom-nav { display: block; }
+            .main-content { padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px)); }
         }
 
         /* ===== CARDS ===== */
         .form-card {
-            background: white;
+            background: var(--white);
             border-radius: var(--radius);
-            padding: 18px;
-            margin-bottom: 14px;
+            padding: 16px;
+            margin-bottom: 12px;
             border: 1px solid var(--border);
-            box-shadow: var(--shadow-sm);
         }
         .form-card h3 {
             color: var(--primary);
             font-weight: 700;
-            letter-spacing: 0.1px;
+            font-size: 14.5px;
+            display: flex;
+            align-items: center;
+            gap: 7px;
         }
         .form-label {
             display: block;
-            font-size: 12px;
-            font-weight: 700;
-            color: var(--text-light);
+            font-size: 11.5px;
+            font-weight: 600;
+            color: var(--text-muted);
             margin-bottom: 6px;
             text-transform: uppercase;
-            letter-spacing: 0.6px;
+            letter-spacing: 0.4px;
         }
         .form-input, .form-select {
             width: 100%;
-            padding: 12px 14px;
+            padding: 11px 13px;
             border: 1.5px solid var(--border);
-            border-radius: 10px;
+            border-radius: var(--radius-sm);
             font-size: 16px;
             font-family: inherit;
-            background: white;
-            color: var(--text-dark);
+            background: var(--white);
+            color: var(--text);
             transition: border-color 0.15s ease, box-shadow 0.15s ease;
         }
         .form-input:focus, .form-select:focus {
@@ -183,91 +239,125 @@
             border-color: var(--primary);
             box-shadow: 0 0 0 3px var(--primary-wash-strong);
         }
-        .form-group { margin-bottom: 16px; }
+        .form-group { margin-bottom: 14px; }
 
-        /* ===== BUTTONS ===== */
-        .btn-submit {
+        /* ===== BOUTONS — hiérarchie claire ===== */
+        .btn-submit, .btn-primary {
             width: 100%;
-            padding: 15px;
-            background: var(--success);
-            color: white;
+            display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+            padding: 13px;
+            background: var(--primary);
+            color: var(--white);
             border: none;
-            border-radius: 10px;
-            font-size: 14px;
-            font-weight: 700;
+            border-radius: var(--radius-sm);
+            font-size: 13.5px;
+            font-weight: 600;
+            font-family: inherit;
             cursor: pointer;
-            text-transform: uppercase;
-            letter-spacing: 0.6px;
-            box-shadow: var(--shadow-sm);
-            transition: transform 0.1s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+            transition: background 0.15s ease, transform 0.1s ease;
         }
-        .btn-submit:hover { box-shadow: var(--shadow-md); }
-        .btn-submit:active { transform: scale(0.98); }
-        .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+        .btn-submit:hover, .btn-primary:hover { background: #1F4318; }
+        .btn-submit:active, .btn-primary:active { transform: scale(0.98); }
+        .btn-submit:disabled, .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .btn-secondary {
+            width: 100%;
+            display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+            padding: 12px;
+            background: var(--white);
+            color: var(--primary);
+            border: 1.5px solid var(--border);
+            border-radius: var(--radius-sm);
+            font-size: 13.5px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+        .btn-secondary:hover { background: var(--primary-wash); border-color: var(--primary); }
+        .btn-secondary:active { transform: scale(0.98); }
+
+        .btn-tertiary {
+            background: none;
+            border: none;
+            color: var(--primary);
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 6px 2px;
+        }
+        .btn-tertiary:hover { opacity: 0.75; }
+
+        .btn-danger {
+            background: var(--white);
+            color: var(--bordeaux);
+            border: 1.5px solid var(--border);
+        }
+        .btn-danger:hover { background: var(--bordeaux-wash); border-color: var(--bordeaux); }
 
         .btn-icon-delete {
-            width: 30px;
-            height: 30px;
+            width: 28px;
+            height: 28px;
             flex-shrink: 0;
             border-radius: 50%;
             border: 1px solid var(--border);
-            background: var(--light-bg);
-            color: #a13b2f;
-            font-size: 13px;
+            background: var(--bg);
+            color: var(--bordeaux);
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
             transition: background 0.15s ease, transform 0.1s ease;
         }
-        .btn-icon-delete:hover { background: #fbe4e0; }
+        .btn-icon-delete:hover { background: var(--bordeaux-wash); }
         .btn-icon-delete:active { transform: scale(0.92); }
 
         /* ===== INFO BOX ===== */
         .info-box {
-            padding: 13px 14px;
-            border-radius: 10px;
-            margin-bottom: 12px;
+            padding: 12px 13px;
+            border-radius: var(--radius-sm);
+            margin-bottom: 10px;
             font-size: 13px;
-            border-left: 4px solid;
+            border-left: 3px solid;
         }
         .info-box.warning {
-            background: #fff3cd;
-            border-left-color: var(--accent);
-            color: #6b5300;
+            background: var(--beige);
+            border-left-color: var(--warning);
+            color: #4A3A1E;
         }
         .info-box strong {
             display: block;
-            font-size: 17px;
+            font-size: 16px;
             margin-bottom: 2px;
         }
 
         /* ===== CHECKBOXES (produits / parcelles du workflow) ===== */
         .checkbox-item {
-            padding: 12px 14px;
-            background: var(--light-bg);
+            padding: 11px 13px;
+            background: var(--bg);
             border: 1.5px solid var(--border);
-            border-radius: 10px;
+            border-radius: var(--radius-sm);
             cursor: pointer;
             display: flex;
             gap: 10px;
             align-items: flex-start;
-            margin-bottom: 8px;
-            transition: border-color 0.15s ease, background 0.15s ease;
+            margin-bottom: 7px;
+            transition: border-color 0.15s ease;
         }
-        .checkbox-item:hover { border-color: var(--primary); }
+        .checkbox-item:hover { border-color: var(--secondary); }
         .checkbox-item input { margin-top: 2px; cursor: pointer; accent-color: var(--primary); width: 17px; height: 17px; }
         .checkbox-name { font-weight: 600; font-size: 13px; }
 
         /* ===== ITEM CARD (historique, parcelles, produits) ===== */
         .item-card {
-            background: white;
-            border-radius: 12px;
-            padding: 13px 14px;
-            margin-bottom: 8px;
+            background: var(--white);
+            border-radius: var(--radius-sm);
+            padding: 12px 13px;
+            margin-bottom: 7px;
             border: 1px solid var(--border);
-            border-left: 3px solid var(--accent);
-            box-shadow: var(--shadow-sm);
+            border-left: 3px solid var(--secondary);
         }
         .item-row {
             display: flex;
@@ -277,32 +367,35 @@
         }
         .empty-note {
             font-size: 13px;
-            color: var(--text-light);
+            color: var(--text-muted);
             text-align: center;
-            padding: 18px 10px;
-            font-style: italic;
+            padding: 16px 10px;
         }
 
-        /* ===== STAT GRID (accueil) ===== */
-        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .stat-card {
-            background: var(--primary-wash);
+        /* ===== Ligne d'info compacte (remplace les grosses stat-card) ===== */
+        .stat-row { display: flex; gap: 8px; }
+        .stat-chip {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--bg);
             border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 14px;
-            text-align: center;
+            border-radius: var(--radius-sm);
+            padding: 9px 11px;
         }
-        .stat-value { font-size: 28px; font-weight: 800; color: var(--primary); line-height: 1.1; }
-        .stat-label { font-size: 11px; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; font-weight: 600; }
+        .stat-chip .icon { color: var(--secondary); }
+        .stat-chip-value { font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.1; }
+        .stat-chip-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.3px; }
 
         .step-badge {
-            font-size: 11px;
+            font-size: 10.5px;
             font-weight: 700;
             background: var(--primary);
-            color: white;
-            padding: 5px 10px;
-            border-radius: 20px;
-            letter-spacing: 0.4px;
+            color: var(--white);
+            padding: 4px 10px;
+            border-radius: var(--radius-sm);
+            letter-spacing: 0.3px;
         }
 
         /* ===== PAGES PLEIN ÉCRAN (chargement / création) ===== */
@@ -314,16 +407,13 @@
             overflow-y: auto;
             padding: 20px;
             position: relative;
-            background:
-                radial-gradient(circle at 15% 20%, var(--accent-wash) 0%, transparent 45%),
-                radial-gradient(circle at 85% 80%, var(--primary-wash-strong) 0%, transparent 45%),
-                var(--light-bg);
+            background: var(--bg);
         }
 
         .auth-card {
-            background: white;
-            border-radius: 20px;
-            padding: 40px 30px;
+            background: var(--white);
+            border-radius: var(--radius-lg);
+            padding: 36px 28px;
             border: 1px solid var(--border);
             width: 100%;
             max-width: 400px;
@@ -334,38 +424,39 @@
             margin: auto 0;
         }
 
-        .auth-title { font-size: 23px; font-weight: 800; margin-bottom: 6px; color: var(--primary); letter-spacing: 0.1px; }
-        .auth-subtitle { font-size: 14px; color: var(--text-light); margin-bottom: 28px; }
+        .auth-title { font-size: 21px; font-weight: 700; margin-bottom: 6px; color: var(--primary); }
+        .auth-subtitle { font-size: 13.5px; color: var(--text-muted); margin-bottom: 24px; }
 
         .btn-google {
             width: 100%;
-            padding: 14px;
-            background: white;
-            color: var(--text-dark);
+            padding: 13px;
+            background: var(--white);
+            color: var(--text);
             border: 1px solid var(--border);
-            border-radius: 10px;
-            font-size: 15px;
+            border-radius: var(--radius-sm);
+            font-size: 14px;
             font-weight: 600;
+            font-family: inherit;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 8px;
         }
-        .btn-google:hover { background: var(--light-bg); }
+        .btn-google:hover { background: var(--bg); }
 
         .loading {
             text-align: center;
             padding: 20px;
-            color: var(--text-light);
+            color: var(--text-muted);
         }
 
         .spinner {
             border: 3px solid var(--border);
             border-top: 3px solid var(--primary);
             border-radius: 50%;
-            width: 32px;
-            height: 32px;
+            width: 30px;
+            height: 30px;
             animation: spin 0.8s linear infinite;
             margin: 0 auto 14px;
         }
@@ -384,18 +475,7 @@
     <!-- PAGE CHARGEMENT -->
     <div id="loading-page" class="auth-page">
         <div class="auth-card">
-            <svg class="logo-mark-lg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Logo PhytoLog">
-                <path class="mark-leaf" d="M50 8 C30 10 20 28 30 46 C38 40 46 30 50 8 Z"/>
-                <path class="mark-leaf" d="M50 8 C70 10 80 28 70 46 C62 40 54 30 50 8 Z"/>
-                <line class="mark-stem" x1="50" y1="8" x2="50" y2="46"/>
-                <circle class="mark-grape" cx="38" cy="52" r="9"/>
-                <circle class="mark-grape" cx="62" cy="52" r="9"/>
-                <circle class="mark-grape" cx="50" cy="60" r="9"/>
-                <circle class="mark-grape" cx="30" cy="68" r="8"/>
-                <circle class="mark-grape" cx="50" cy="76" r="8"/>
-                <circle class="mark-grape" cx="70" cy="68" r="8"/>
-                <path class="mark-check" d="M45 76 L49 80 L57 70" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
+            <img src="./logo-complet.png" class="logo-mark-lg" alt="PhytoLog — Suivi des traitements phytosanitaires">
             <div class="spinner"></div>
             <p style="color: var(--text-light); font-size: 14px;">Connexion à PhytoLog...</p>
         </div>
@@ -404,18 +484,7 @@
     <!-- PAGE CRÉATION EXPLOITATION (premiers utilisateurs) -->
     <div id="setup-page" class="auth-page" style="display: none;">
         <div class="auth-card">
-            <svg class="logo-mark-lg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Logo PhytoLog">
-                <path class="mark-leaf" d="M50 8 C30 10 20 28 30 46 C38 40 46 30 50 8 Z"/>
-                <path class="mark-leaf" d="M50 8 C70 10 80 28 70 46 C62 40 54 30 50 8 Z"/>
-                <line class="mark-stem" x1="50" y1="8" x2="50" y2="46"/>
-                <circle class="mark-grape" cx="38" cy="52" r="9"/>
-                <circle class="mark-grape" cx="62" cy="52" r="9"/>
-                <circle class="mark-grape" cx="50" cy="60" r="9"/>
-                <circle class="mark-grape" cx="30" cy="68" r="8"/>
-                <circle class="mark-grape" cx="50" cy="76" r="8"/>
-                <circle class="mark-grape" cx="70" cy="68" r="8"/>
-                <path class="mark-check" d="M45 76 L49 80 L57 70" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
+            <img src="./logo-complet.png" class="logo-mark-lg" alt="PhytoLog — Suivi des traitements phytosanitaires">
             <h1 class="auth-title">Bienvenue sur PhytoLog</h1>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 20px;">
@@ -506,18 +575,7 @@
     <div id="main-app" style="display: none; flex: 1; display: flex; flex-direction: column;">
         <div class="header">
             <div class="brand">
-                <svg class="logo-mark-sm" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Logo PhytoLog">
-                    <path class="mark-leaf" d="M50 8 C30 10 20 28 30 46 C38 40 46 30 50 8 Z"/>
-                    <path class="mark-leaf" d="M50 8 C70 10 80 28 70 46 C62 40 54 30 50 8 Z"/>
-                    <line class="mark-stem" x1="50" y1="8" x2="50" y2="46"/>
-                    <circle class="mark-grape" cx="38" cy="52" r="9"/>
-                    <circle class="mark-grape" cx="62" cy="52" r="9"/>
-                    <circle class="mark-grape" cx="50" cy="60" r="9"/>
-                    <circle class="mark-grape" cx="30" cy="68" r="8"/>
-                    <circle class="mark-grape" cx="50" cy="76" r="8"/>
-                    <circle class="mark-grape" cx="70" cy="68" r="8"/>
-                    <path class="mark-check" d="M45 76 L49 80 L57 70" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
+                <img src="./logo-mark.png" class="logo-mark-sm" alt="PhytoLog">
                 <div class="brand-text">
                     <div class="logo">PhytoLog</div>
                     <div class="tagline">Suivi des traitements phytosanitaires</div>
@@ -529,32 +587,42 @@
         </div>
 
         <div class="nav-tabs">
-            <button class="nav-btn active" onclick="switchView('menu')">🏠 Accueil</button>
-            <button class="nav-btn" onclick="switchView('workflow')">⚙️ Traitement</button>
-            <button class="nav-btn" onclick="switchView('histo')">📋 Historique</button>
-            <button class="nav-btn" onclick="switchView('reglages')">🔧 Réglages</button>
+            <button class="nav-btn active" onclick="switchView('menu')"><i data-lucide="home" class="icon-sm"></i>Accueil</button>
+            <button class="nav-btn" onclick="switchView('workflow')"><i data-lucide="beaker" class="icon-sm"></i>Traitement</button>
+            <button class="nav-btn" onclick="allerParcelles()"><i data-lucide="map" class="icon-sm"></i>Parcelles</button>
+            <button class="nav-btn" onclick="switchView('histo')"><i data-lucide="history" class="icon-sm"></i>Historique</button>
+            <button class="nav-btn" onclick="switchView('reglages')"><i data-lucide="settings" class="icon-sm"></i>Plus</button>
         </div>
+
+        <nav class="bottom-nav">
+            <div class="bottom-nav-inner">
+                <button class="bottom-nav-btn active" onclick="switchView('menu')"><i data-lucide="home" class="icon"></i>Accueil</button>
+                <button class="bottom-nav-btn" onclick="switchView('workflow')"><i data-lucide="beaker" class="icon"></i>Traitement</button>
+                <button class="bottom-nav-btn" onclick="allerParcelles()"><i data-lucide="map" class="icon"></i>Parcelles</button>
+                <button class="bottom-nav-btn" onclick="switchView('histo')"><i data-lucide="history" class="icon"></i>Historique</button>
+                <button class="bottom-nav-btn" onclick="switchView('reglages')"><i data-lucide="settings" class="icon"></i>Plus</button>
+            </div>
+        </nav>
 
         <div class="main-content">
             <!-- MENU PRINCIPAL -->
             <section id="menu" class="section active">
-                <div class="form-card" id="carte-brouillon" style="display: none;"></div>
-                <div class="form-card" id="bandeau-attente" style="display: none; border-left: 4px solid var(--accent);"></div>
-                <div class="form-card" id="carte-meteo-accueil" style="display: none;">
-                    <h3 style="font-size: 14px; margin-bottom: 12px;">🌦️ Météo actuelle</h3>
+                <div id="carte-brouillon" style="display: none; margin-bottom: 12px;"></div>
+                <div id="bandeau-attente" style="display: none; margin-bottom: 12px;"></div>
+
+                <div class="form-card" id="carte-meteo-accueil" style="display: none; padding: 12px 14px;">
                     <div id="meteo-actuelle-contenu"></div>
                 </div>
-                <div class="form-card">
-                    <h3 style="margin-bottom: 16px; text-align: center;">🍇 Gestion des traitements</h3>
-                    <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
-                        <button class="btn-submit" onclick="demarrerTraitement()">▶ Démarrer un traitement</button>
-                        <button class="btn-submit" style="background: white; color: var(--primary); border: 1.5px solid var(--border);" onclick="switchView('histo')">📋 Voir l'historique</button>
-                    </div>
-                </div>
-                <div class="form-card">
-                    <h3 style="font-size: 14px; margin-bottom: 12px;">📊 Récapitulatif</h3>
-                    <div id="menu-stats"></div>
-                </div>
+
+                <button class="btn-primary" style="margin-bottom: 12px;" onclick="demarrerTraitement()">
+                    <i data-lucide="play" class="icon-sm"></i> Démarrer un traitement
+                </button>
+
+                <div id="menu-stats" style="margin-bottom: 10px;"></div>
+
+                <button class="btn-tertiary" style="margin: 0 auto; display: flex;" onclick="switchView('histo')">
+                    Voir l'historique <i data-lucide="arrow-right" class="icon-sm"></i>
+                </button>
             </section>
 
             <!-- WORKFLOW DIRIGÉ -->
@@ -1121,21 +1189,27 @@
                 const c = data.current;
 
                 document.getElementById('meteo-actuelle-contenu').innerHTML = `
-                    <div class="stat-grid">
-                        <div class="stat-card">
-                            <div class="stat-value" style="font-size: 22px;">${Math.round(c.temperature_2m)}°C</div>
-                            <div class="stat-label">Température</div>
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap;">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <i data-lucide="thermometer-sun" class="icon" style="color: var(--secondary);"></i>
+                            <strong style="font-size: 16px;">${Math.round(c.temperature_2m)}°C</strong>
                         </div>
-                        <div class="stat-card">
-                            <div class="stat-value" style="font-size: 22px;">${Math.round(c.wind_speed_10m)} <span style="font-size:12px;">km/h</span></div>
-                            <div class="stat-label">💨 Vent ${degresVersPoint(c.wind_direction_10m)} (rafales ${Math.round(c.wind_gusts_10m)})</div>
+                        <div style="display: flex; align-items: center; gap: 6px;" title="Rafales ${Math.round(c.wind_gusts_10m)} km/h">
+                            <i data-lucide="wind" class="icon" style="color: var(--secondary);"></i>
+                            <strong style="font-size: 14px;">${Math.round(c.wind_speed_10m)}</strong><span style="font-size: 11px; color: var(--text-muted);"> km/h ${degresVersPoint(c.wind_direction_10m)}</span>
                         </div>
-                    </div>
-                    <div style="font-size: 12px; color: var(--text-light); text-align: center; margin-top: 10px;">
-                        🌧️ ${c.precipitation} mm de pluie · ${Math.round(c.surface_pressure)} hPa · ${currentExploitation.region || ''}
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <i data-lucide="droplets" class="icon" style="color: var(--secondary);"></i>
+                            <strong style="font-size: 14px;">${c.precipitation}</strong><span style="font-size: 11px; color: var(--text-muted);"> mm</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <i data-lucide="gauge" class="icon" style="color: var(--secondary);"></i>
+                            <strong style="font-size: 14px;">${Math.round(c.surface_pressure)}</strong><span style="font-size: 11px; color: var(--text-muted);"> hPa</span>
+                        </div>
                     </div>
                 `;
                 document.getElementById('carte-meteo-accueil').style.display = 'block';
+                if (typeof lucide !== 'undefined') lucide.createIcons();
             } catch (err) {
                 console.warn('Météo actuelle indisponible:', err);
             }
@@ -2139,15 +2213,17 @@
             const n = b.parcelles.length;
             carte.style.display = 'block';
             carte.innerHTML = `
-                <h3 style="font-size: 14px; margin-bottom: 8px;">⏸️ Traitement en cours</h3>
-                <div style="font-size: 13px; color: var(--text-light); margin-bottom: 12px;">
-                    Démarré le ${jour} à ${heure} · ${n} parcelle${n > 1 ? 's' : ''} cochée${n > 1 ? 's' : ''}
+                <div class="form-card" style="display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-left: 3px solid var(--secondary);">
+                    <i data-lucide="pause-circle" class="icon-lg" style="color: var(--secondary); flex-shrink: 0;"></i>
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="font-weight: 700; font-size: 13.5px;">Traitement en cours</div>
+                        <div style="font-size: 12px; color: var(--text-muted);">${jour} à ${heure} · ${n} parcelle${n > 1 ? 's' : ''}</div>
+                    </div>
+                    <button class="btn-primary" style="width: auto; padding: 9px 16px; flex-shrink: 0;" onclick="reprendreBrouillon()">Reprendre</button>
                 </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                    <button class="btn-submit" onclick="reprendreBrouillon()">▶ Reprendre</button>
-                    <button class="btn-submit" style="background: white; color: var(--text-light); border: 1.5px solid var(--border);" onclick="abandonnerBrouillon()">Abandonner</button>
-                </div>
+                <button class="btn-tertiary" style="margin-top: 2px;" onclick="abandonnerBrouillon()"><i data-lucide="x" class="icon-sm"></i>Abandonner ce traitement</button>
             `;
+            if (typeof lucide !== 'undefined') lucide.createIcons();
         }
 
         function reprendreBrouillon() {
@@ -2764,15 +2840,22 @@
                     bandeau.style.display = 'none';
                     bandeau.innerHTML = '';
                 } else {
+                    const iconeEtat = dernierEtatEnvoi && !dernierEtatEnvoi.reseau ? 'alert-triangle' : 'cloud-off';
                     const etat = dernierEtatEnvoi && !dernierEtatEnvoi.reseau
-                        ? `⚠️ L'envoi a échoué : ${echapperHtml(dernierEtatEnvoi.message)}`
-                        : '📴 Il sera envoyé dès que le réseau revient.';
+                        ? `L'envoi a échoué : ${echapperHtml(dernierEtatEnvoi.message)}`
+                        : 'Sera envoyé dès que le réseau revient.';
                     bandeau.style.display = 'block';
                     bandeau.innerHTML = `
-                        <h3 style="font-size: 14px; margin-bottom: 6px;">⏳ ${n} compte${n > 1 ? 's' : ''} rendu${n > 1 ? 's' : ''} en attente d'envoi</h3>
-                        <div style="font-size: 12px; color: var(--text-light); margin-bottom: 10px;">${etat}</div>
-                        <button class="btn-submit" onclick="renvoyerMaintenant()">↻ Renvoyer maintenant</button>
+                        <div class="form-card" style="display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-left: 3px solid var(--warning);">
+                            <i data-lucide="${iconeEtat}" class="icon-lg" style="color: var(--warning); flex-shrink: 0;"></i>
+                            <div style="flex: 1; min-width: 0;">
+                                <div style="font-weight: 700; font-size: 13.5px;">${n} compte${n > 1 ? 's' : ''} rendu${n > 1 ? 's' : ''} en attente</div>
+                                <div style="font-size: 12px; color: var(--text-muted);">${etat}</div>
+                            </div>
+                            <button class="btn-secondary" style="width: auto; padding: 9px 14px; flex-shrink: 0;" onclick="renvoyerMaintenant()"><i data-lucide="refresh-cw" class="icon-sm"></i></button>
+                        </div>
                     `;
+                    if (typeof lucide !== 'undefined') lucide.createIcons();
                 }
             }
             afficherHisto();
@@ -2883,6 +2966,7 @@
         function afficherAppPrincipale() {
             document.getElementById('loading-page').style.display = 'none';
             document.getElementById('main-app').style.display = 'flex';
+            if (typeof lucide !== 'undefined') lucide.createIcons();
         }
 
         function afficherMenu() {
@@ -2891,17 +2975,24 @@
                 ? new Date(traitements[0].date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
                 : '—';
             stats.innerHTML = `
-                <div class="stat-grid">
-                    <div class="stat-card">
-                        <div class="stat-value">${traitements.length}</div>
-                        <div class="stat-label">📊 Traitements</div>
+                <div class="stat-row">
+                    <div class="stat-chip">
+                        <i data-lucide="clipboard-list" class="icon"></i>
+                        <div>
+                            <div class="stat-chip-value">${traitements.length}</div>
+                            <div class="stat-chip-label">Traitements</div>
+                        </div>
                     </div>
-                    <div class="stat-card">
-                        <div class="stat-value" style="font-size: 20px;">${dernierLabel}</div>
-                        <div class="stat-label">📅 Dernier</div>
+                    <div class="stat-chip">
+                        <i data-lucide="calendar" class="icon"></i>
+                        <div>
+                            <div class="stat-chip-value">${dernierLabel}</div>
+                            <div class="stat-chip-label">Dernier</div>
+                        </div>
                     </div>
                 </div>
             `;
+            if (typeof lucide !== 'undefined') lucide.createIcons();
         }
 
         function genererPDFTraitementEnAttente(i) {
@@ -3128,9 +3219,17 @@
         function switchView(view) {
             document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
             document.getElementById(view).classList.add('active');
-            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-            document.querySelector(`button[onclick="switchView('${view}')"]`).classList.add('active');
+            document.querySelectorAll('.nav-btn, .bottom-nav-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll(`button[onclick="switchView('${view}')"]`).forEach(b => b.classList.add('active'));
             if (view === 'workflow') majVueWorkflow();
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        // Raccourci de navigation : "Parcelles" vit dans l'onglet Réglages, mais mérite
+        // un accès direct vu la fréquence de consultation (demandé explicitement).
+        function allerParcelles() {
+            switchView('reglages');
+            afficherOngletReglages('parcelles');
         }
 
         // ===== INIT =====
