@@ -664,6 +664,15 @@
             <section id="reglages" class="section">
                 <div class="form-card" id="reglages-note-role" style="display: none; background: var(--light-bg);"></div>
 
+                <div style="display: flex; gap: 6px; overflow-x: auto; margin-bottom: 14px; padding-bottom: 2px;">
+                    <button type="button" class="nav-btn active" id="onglet-reglages-compte" onclick="afficherOngletReglages('compte')">👤 Compte</button>
+                    <button type="button" class="nav-btn" id="onglet-reglages-exploitation" data-admin-seulement onclick="afficherOngletReglages('exploitation')">🏡 Exploitation</button>
+                    <button type="button" class="nav-btn" id="onglet-reglages-collaborateurs" data-admin-seulement onclick="afficherOngletReglages('collaborateurs')">🤝 Collaborateurs</button>
+                    <button type="button" class="nav-btn" id="onglet-reglages-parcelles" onclick="afficherOngletReglages('parcelles')">🌱 Parcelles</button>
+                    <button type="button" class="nav-btn" id="onglet-reglages-produits" onclick="afficherOngletReglages('produits')">🧴 Produits</button>
+                </div>
+
+                <div id="reglages-panneau-compte">
                 <div class="form-card" id="carte-compte">
                     <h3 style="margin-bottom: 12px;">👤 Mon compte</h3>
                     <div id="compte-email-info" style="font-size: 13px; margin-bottom: 12px;"></div>
@@ -721,7 +730,9 @@
 
                     <button class="btn-submit" style="background: white; color: #a13b2f; border: 1.5px solid var(--border); margin-top: 16px;" onclick="seDeconnecter()">↪ Se déconnecter</button>
                 </div>
+                </div>
 
+                <div id="reglages-panneau-collaborateurs" style="display: none;">
                 <div class="form-card" data-admin-seulement>
                     <h3 style="margin-bottom: 16px;">🤝 Collaborateurs</h3>
                     <div id="reglages-collaborateurs-list"></div>
@@ -734,7 +745,9 @@
                         <p style="font-size: 11px; color: var(--text-light); margin-top: 8px;">La personne invitée doit ajouter cette même adresse email dans "Mon compte" pour accéder à ton exploitation.</p>
                     </div>
                 </div>
+                </div>
 
+                <div id="reglages-panneau-exploitation" style="display: none;">
                 <div class="form-card" data-admin-seulement>
                     <h3 style="margin-bottom: 16px;">🏡 Mon exploitation</h3>
                     <div class="form-group">
@@ -761,7 +774,9 @@
                         <button class="btn-submit" style="background: white; color: var(--primary); border: 1.5px solid var(--border);" onclick="localiserAvecGPS()">📍 Me localiser (GPS)</button>
                     </div>
                 </div>
+                </div>
 
+                <div id="reglages-panneau-parcelles" style="display: none;">
                 <div class="form-card">
                     <h3 style="margin-bottom: 16px;">🌱 Mes parcelles</h3>
                     <div id="reglages-parcelles-list"></div>
@@ -780,6 +795,14 @@
                         </div>
                         <button class="btn-submit" onclick="ajouterParcelle()">+ Ajouter la parcelle</button>
                     </div>
+                </div>
+                </div>
+
+                <div id="reglages-panneau-produits" style="display: none;">
+                <div class="form-card" id="carte-produits-favoris" style="display: none;">
+                    <h3 style="margin-bottom: 4px;">⭐ Mes produits fréquents</h3>
+                    <p style="font-size: 12px; color: var(--text-light); margin-bottom: 10px;">Ceux que tu utilises souvent — marque-les avec l'étoile dans la liste ci-dessous pour les retrouver ici.</p>
+                    <div id="reglages-produits-favoris-list"></div>
                 </div>
 
                 <div class="form-card">
@@ -805,6 +828,7 @@
                         <button class="btn-submit" onclick="ajouterProduit()">+ Ajouter le produit</button>
                         <a href="https://ephy.anses.fr/" target="_blank" rel="noopener" style="display: block; text-align: center; margin-top: 10px; font-size: 12px; color: var(--primary); font-weight: 600;">🔍 Vérifier la dose et les usages sur E-Phy (Anses) ↗</a>
                     </div>
+                </div>
                 </div>
 
                 <div style="text-align: center; padding: 16px 0 4px; font-size: 11px; color: var(--text-light);">
@@ -846,6 +870,7 @@
         let dernierRapport = null;    // dernier compte rendu validé (sert au bouton PDF de la confirmation)
         let monRole = null;           // 'admin' ou 'collaborateur' sur l'exploitation actuelle
         let collaborateurs = [];      // liste des invitations/collaborateurs (admin uniquement)
+        let produitsFavorisIds = new Set(); // id des produits marqués favoris pour cette exploitation
 
         // ===== STOCKAGE LOCAL (brouillon + comptes rendus en attente) =====
         // Tout passe par cet objet. Le jour où PhytoLog sera une application des magasins, on
@@ -1292,6 +1317,7 @@
             afficherAppPrincipale();
             await chargerParcelles();
             await chargerProduits();
+            await chargerProduitsFavoris();
             await chargerTraitements();
             await chargerCollaborateurs();
 
@@ -1748,6 +1774,64 @@
             }
         }
 
+        async function chargerProduitsFavoris() {
+            try {
+                const { data, error } = await supabaseClient
+                    .from('produits_favoris')
+                    .select('produit_id')
+                    .eq('exploitation_id', currentExploitation.id);
+                if (error) throw error;
+                produitsFavorisIds = new Set((data || []).map(f => f.produit_id));
+            } catch (err) {
+                console.error('Erreur produits favoris:', err);
+                produitsFavorisIds = new Set();
+            }
+        }
+
+        async function basculerFavoriProduit(produitId) {
+            const estFavori = produitsFavorisIds.has(produitId);
+            try {
+                if (estFavori) {
+                    const { error } = await supabaseClient
+                        .from('produits_favoris')
+                        .delete()
+                        .eq('exploitation_id', currentExploitation.id)
+                        .eq('produit_id', produitId);
+                    if (error) throw error;
+                } else {
+                    const { error } = await supabaseClient
+                        .from('produits_favoris')
+                        .insert([{ exploitation_id: currentExploitation.id, produit_id: produitId }]);
+                    if (error) throw error;
+                }
+                await chargerProduitsFavoris();
+                afficherReglages();
+            } catch (err) {
+                alert('Erreur: ' + messageErreur(err));
+            }
+        }
+
+        function afficherProduitsFavoris() {
+            const carte = document.getElementById('carte-produits-favoris');
+            const zone = document.getElementById('reglages-produits-favoris-list');
+            if (!carte || !zone) return;
+            const favoris = produits.filter(p => produitsFavorisIds.has(p.id));
+            if (favoris.length === 0) {
+                carte.style.display = 'none';
+                return;
+            }
+            carte.style.display = 'block';
+            zone.innerHTML = favoris.map(p => `
+                <div class="item-card item-row">
+                    <div>
+                        <strong style="font-size: 13px;">${echapperHtml(p.nom)}</strong>
+                        <div style="font-size: 11px; color: var(--text-light); margin-top: 2px;">${p.dose} ${p.unite || 'L/ha'}</div>
+                    </div>
+                    <button class="btn-icon-delete" title="Retirer des favoris" style="color: var(--accent);" onclick="basculerFavoriProduit('${p.id}')">★</button>
+                </div>
+            `).join('');
+        }
+
         async function ajouterProduit() {
             if (!currentExploitation) {
                 alert('Ton exploitation n\'est pas encore chargée. Recharge la page (Cmd+R) et réessaie.');
@@ -1914,6 +1998,18 @@
                 noteRole.style.display = estAdmin ? 'none' : 'block';
                 noteRole.textContent = "Tu es collaborateur sur cette exploitation : tu peux réaliser des traitements et consulter l'historique, mais seul l'administrateur peut modifier les parcelles, les produits ou les informations de l'exploitation.";
             }
+        }
+
+        let ongletReglagesActuel = 'compte';
+
+        function afficherOngletReglages(nom) {
+            ongletReglagesActuel = nom;
+            ['compte', 'exploitation', 'collaborateurs', 'parcelles', 'produits'].forEach(n => {
+                const panneau = document.getElementById('reglages-panneau-' + n);
+                if (panneau) panneau.style.display = (n === nom) ? 'block' : 'none';
+                const bouton = document.getElementById('onglet-reglages-' + n);
+                if (bouton) bouton.classList[n === nom ? 'add' : 'remove']('active');
+            });
         }
 
         // ===== 3. TRAITEMENT EN COURS : BROUILLON, ÉTAPES, ENVOI =====
@@ -2172,7 +2268,13 @@
                 return;
             }
 
-            produits.forEach(prod => {
+            const produitsTries = [...produits].sort((a, b) => {
+                const fa = produitsFavorisIds.has(a.id), fb = produitsFavorisIds.has(b.id);
+                if (fa !== fb) return fa ? -1 : 1;
+                return 0; // conserve l'ordre déjà trié par nom renvoyé par chargerProduits()
+            });
+
+            produitsTries.forEach(prod => {
                 const label = document.createElement('label');
                 label.className = 'checkbox-item';
                 label.dataset.recherche = normaliserRecherche(prod.nom + ' ' + (prod.categorie || ''));
@@ -2188,7 +2290,7 @@
                 div.style.flex = '1';
                 const nom = document.createElement('strong');
                 nom.style.fontSize = '13px';
-                nom.textContent = prod.nom;
+                nom.textContent = (produitsFavorisIds.has(prod.id) ? '★ ' : '') + prod.nom;
                 const detail = document.createElement('div');
                 detail.style.cssText = 'font-size: 11px; color: var(--text-light);';
                 detail.textContent = `${prod.dose} ${prod.unite || 'L/ha'} (défaut)`;
@@ -2887,15 +2989,24 @@
             if (produits.length === 0) {
                 prodCont.innerHTML = '<p class="empty-note">Aucun produit pour l\'instant.</p>';
             } else {
-                prodCont.innerHTML = produits.map(p => `
+                const produitsTries = [...produits].sort((a, b) => {
+                    const fa = produitsFavorisIds.has(a.id), fb = produitsFavorisIds.has(b.id);
+                    if (fa !== fb) return fa ? -1 : 1;
+                    return a.nom.localeCompare(b.nom);
+                });
+                prodCont.innerHTML = produitsTries.map(p => {
+                    const estFavori = produitsFavorisIds.has(p.id);
+                    return `
                     <div class="item-card item-row" data-recherche="${normaliserRecherche(p.nom + ' ' + (p.categorie || ''))}">
-                        <div>
+                        <button class="btn-icon-delete" title="${estFavori ? 'Retirer des favoris' : 'Marquer comme favori'}" style="color: var(--accent); margin-right: 8px;" onclick="basculerFavoriProduit('${p.id}')">${estFavori ? '★' : '☆'}</button>
+                        <div style="flex: 1;">
                             <strong style="font-size: 13px;">${p.nom}</strong>
                             <div style="font-size: 11px; color: var(--text-light); margin-top: 2px;">${p.dose} ${p.unite || 'L/ha'}${p.exploitation_id ? '' : ' · partagé'}</div>
                         </div>
                         ${(p.exploitation_id && monRole === 'admin') ? `<button class="btn-icon-delete" title="Supprimer" onclick="supprimerProduit('${p.id}', '${p.nom.replace(/'/g, "\\'")}')">✕</button>` : ''}
                     </div>
-                `).join('');
+                `;
+                }).join('');
             }
             const rechercheInput = document.getElementById('reglages-produits-recherche');
             if (rechercheInput) filtrerReglagesProduits(rechercheInput.value);
@@ -2903,6 +3014,8 @@
             afficherCollaborateurs();
             afficherStatutCompte();
             appliquerRestrictionsRole();
+            afficherOngletReglages(ongletReglagesActuel);
+            afficherProduitsFavoris();
         }
 
         // Filtre en direct la liste de gestion des produits (Réglages)
