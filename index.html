@@ -535,7 +535,7 @@
                         <input type="text" id="setup-cp" class="form-input" inputmode="numeric" maxlength="5" placeholder="Ex: 83570">
                     </div>
                     <div class="form-group" style="text-align: left;">
-                        <button type="button" class="btn-submit" style="background: white; color: var(--primary); border: 1.5px solid var(--border);" onclick="localiserSetupGPS()">📍 Me localiser (GPS)</button>
+                        <button type="button" class="btn-secondary" onclick="localiserSetupGPS()"><i data-lucide="map-pin" class="icon-sm"></i>Me localiser (GPS)</button>
                         <div id="setup-gps-statut" style="font-size: 12px; color: var(--text-light); margin-top: 6px;">Optionnel : plus précis que la ville, utile si tu es sur ton exploitation.</div>
                     </div>
                     <div class="form-group" style="text-align: left;">
@@ -549,7 +549,7 @@
                     <label for="setup-website">Laisser vide</label>
                     <input type="text" id="setup-website" name="website" tabindex="-1" autocomplete="off">
                 </div>
-                <button class="btn-submit" id="btn-setup" onclick="creerCompteEtExploitation()">✓ Créer mon compte et mon exploitation</button>
+                <button class="btn-submit" id="btn-setup" onclick="creerCompteEtExploitation()"><i data-lucide="check" class="icon-sm"></i>Créer mon compte et mon exploitation</button>
                 <div id="setup-statut" style="font-size: 13px; margin-top: 10px;"></div>
             </div>
 
@@ -648,7 +648,7 @@
 
                         <div class="form-group">
                             <label class="form-label">Produits</label>
-                            <input type="text" id="workflow-produits-recherche" class="form-input" placeholder="🔍 Rechercher (nom, cible : mildiou, oïdium...)" style="margin-bottom: 8px;" oninput="filtrerProduits(this.value)">
+                            <input type="text" id="workflow-produits-recherche" class="form-input" placeholder="Rechercher (nom, cible : mildiou, oïdium...)" style="margin-bottom: 8px;" oninput="filtrerProduits(this.value)">
                             <div id="workflow-produits-compte" style="font-size: 11px; color: var(--text-light); margin-bottom: 6px;"></div>
                             <div id="workflow-produits" style="max-height: 340px; overflow-y: auto;"></div>
                         </div>
@@ -659,7 +659,7 @@
                             <div id="workflow-doses-list"></div>
                         </div>
 
-                        <button class="btn-submit" onclick="passerEtape2()" style="margin-top: 16px;">✓ J'ai préparé ma bouillie → Étape 2</button>
+                        <button class="btn-submit" onclick="passerEtape2()" style="margin-top: 16px;">J'ai préparé ma bouillie<i data-lucide="arrow-right" class="icon-sm"></i></button>
                     </div>
                 </div>
 
@@ -691,12 +691,12 @@
                                 <label class="form-label">Surface (ha)</label>
                                 <input type="number" id="workflow-parcelle-surface" class="form-input" step="0.01" placeholder="Ex: 1.20">
                             </div>
-                            <button type="button" class="btn-submit" onclick="ajouterParcelleDepuisWorkflow()">✓ Ajouter et cocher</button>
+                            <button type="button" class="btn-submit" onclick="ajouterParcelleDepuisWorkflow()"><i data-lucide="check" class="icon-sm"></i>Ajouter et cocher</button>
                         </div>
 
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px;">
-                            <button class="btn-submit" style="background: white; color: var(--text-light); border: 1.5px solid var(--border);" onclick="retourEtape1()">← Retour</button>
-                            <button class="btn-submit" id="btn-etape3" onclick="passerEtape3()" disabled>✓ Fin pulvérisation → Étape 3</button>
+                            <button class="btn-secondary" onclick="retourEtape1()"><i data-lucide="arrow-left" class="icon-sm"></i>Retour</button>
+                            <button class="btn-submit" id="btn-etape3" onclick="passerEtape3()" disabled>Fin pulvérisation<i data-lucide="arrow-right" class="icon-sm"></i></button>
                         </div>
                     </div>
                 </div>
@@ -713,8 +713,8 @@
                         <div id="workflow-confirmation"></div>
 
                         <div id="etape3-actions" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px;">
-                            <button class="btn-submit" style="background: white; color: var(--text-light); border: 1.5px solid var(--border);" onclick="retourEtape2()">← Retour</button>
-                            <button class="btn-submit" id="btn-valider" onclick="validerRapport()">✓ Valider & Archiver</button>
+                            <button class="btn-secondary" onclick="retourEtape2()"><i data-lucide="arrow-left" class="icon-sm"></i>Retour</button>
+                            <button class="btn-submit" id="btn-valider" onclick="validerRapport()"><i data-lucide="check" class="icon-sm"></i>Valider & Archiver</button>
                         </div>
                     </div>
                 </div>
@@ -733,16 +733,16 @@
                 <div class="form-card" id="reglages-note-role" style="display: none; background: var(--light-bg);"></div>
 
                 <div style="display: flex; gap: 6px; overflow-x: auto; margin-bottom: 14px; padding-bottom: 2px;">
-                    <button type="button" class="nav-btn active" id="onglet-reglages-compte" onclick="afficherOngletReglages('compte')">👤 Compte</button>
-                    <button type="button" class="nav-btn" id="onglet-reglages-exploitation" data-admin-seulement onclick="afficherOngletReglages('exploitation')">🏡 Exploitation</button>
-                    <button type="button" class="nav-btn" id="onglet-reglages-collaborateurs" data-admin-seulement onclick="afficherOngletReglages('collaborateurs')">🤝 Collaborateurs</button>
-                    <button type="button" class="nav-btn" id="onglet-reglages-parcelles" onclick="afficherOngletReglages('parcelles')">🌱 Parcelles</button>
-                    <button type="button" class="nav-btn" id="onglet-reglages-produits" onclick="afficherOngletReglages('produits')">🧴 Produits</button>
+                    <button type="button" class="nav-btn active" id="onglet-reglages-compte" onclick="afficherOngletReglages('compte')"><i data-lucide="user" class="icon-sm"></i>Compte</button>
+                    <button type="button" class="nav-btn" id="onglet-reglages-exploitation" data-admin-seulement onclick="afficherOngletReglages('exploitation')"><i data-lucide="building" class="icon-sm"></i>Exploitation</button>
+                    <button type="button" class="nav-btn" id="onglet-reglages-collaborateurs" data-admin-seulement onclick="afficherOngletReglages('collaborateurs')"><i data-lucide="users" class="icon-sm"></i>Collaborateurs</button>
+                    <button type="button" class="nav-btn" id="onglet-reglages-parcelles" onclick="afficherOngletReglages('parcelles')"><i data-lucide="map" class="icon-sm"></i>Parcelles</button>
+                    <button type="button" class="nav-btn" id="onglet-reglages-produits" onclick="afficherOngletReglages('produits')"><i data-lucide="flask-conical" class="icon-sm"></i>Produits</button>
                 </div>
 
                 <div id="reglages-panneau-compte">
                 <div class="form-card" id="carte-compte">
-                    <h3 style="margin-bottom: 12px;">👤 Mon compte</h3>
+                    <h3 style="margin-bottom: 12px;"><i data-lucide="user" class="icon"></i>Mon compte</h3>
                     <div id="compte-email-info" style="font-size: 13px; margin-bottom: 12px;"></div>
 
                     <!-- Profil personnel : toujours modifiable, quel que soit l'état du compte -->
@@ -759,7 +759,7 @@
                             <label class="form-label">Date de naissance</label>
                             <input type="date" id="profil-naissance" class="form-input">
                         </div>
-                        <button class="btn-submit" style="background: white; color: var(--primary); border: 1.5px solid var(--border);" onclick="enregistrerMonProfil()">✓ Enregistrer mon profil</button>
+                        <button class="btn-secondary" onclick="enregistrerMonProfil()"><i data-lucide="check" class="icon-sm"></i>Enregistrer mon profil</button>
                         <div id="profil-statut" style="font-size: 13px; margin-top: 8px;"></div>
                     </div>
 
@@ -778,7 +778,7 @@
                             <label class="form-label">Confirmer le mot de passe</label>
                             <input type="password" id="compte-password2-champ" class="form-input" placeholder="••••••••">
                         </div>
-                        <button class="btn-submit" onclick="demanderLierEmail()">🔒 Sécuriser mon compte</button>
+                        <button class="btn-submit" onclick="demanderLierEmail()"><i data-lucide="lock" class="icon-sm"></i>Sécuriser mon compte</button>
                         <div id="compte-email-statut" style="font-size: 13px; margin-top: 10px;"></div>
                     </div>
 
@@ -792,17 +792,17 @@
                             <label class="form-label">Confirmer le nouveau mot de passe</label>
                             <input type="password" id="nouveau-mdp2-champ" class="form-input" placeholder="••••••••">
                         </div>
-                        <button class="btn-submit" style="background: white; color: var(--primary); border: 1.5px solid var(--border);" onclick="demanderChangementMdp()">🔑 Changer mon mot de passe</button>
+                        <button class="btn-secondary" onclick="demanderChangementMdp()"><i data-lucide="key" class="icon-sm"></i>Changer mon mot de passe</button>
                         <div id="changer-mdp-statut" style="font-size: 13px; margin-top: 8px;"></div>
                     </div>
 
-                    <button class="btn-submit" style="background: white; color: #a13b2f; border: 1.5px solid var(--border); margin-top: 16px;" onclick="seDeconnecter()">↪ Se déconnecter</button>
+                    <button class="btn-danger" style="margin-top: 16px;" onclick="seDeconnecter()"><i data-lucide="log-out" class="icon-sm"></i>Se déconnecter</button>
                 </div>
                 </div>
 
                 <div id="reglages-panneau-collaborateurs" style="display: none;">
                 <div class="form-card" data-admin-seulement>
-                    <h3 style="margin-bottom: 16px;">🤝 Collaborateurs</h3>
+                    <h3 style="margin-bottom: 16px;"><i data-lucide="users" class="icon"></i>Collaborateurs</h3>
                     <div id="reglages-collaborateurs-list"></div>
                     <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
                         <div class="form-group">
@@ -817,7 +817,7 @@
 
                 <div id="reglages-panneau-exploitation" style="display: none;">
                 <div class="form-card" data-admin-seulement>
-                    <h3 style="margin-bottom: 16px;">🏡 Mon exploitation</h3>
+                    <h3 style="margin-bottom: 16px;"><i data-lucide="building" class="icon"></i>Mon exploitation</h3>
                     <div class="form-group">
                         <label class="form-label">Nom</label>
                         <input type="text" id="reg-exploit-nom" class="form-input">
@@ -834,19 +834,19 @@
                         <label class="form-label">Surface totale (ha)</label>
                         <input type="number" id="reg-exploit-surface" class="form-input" step="0.1">
                     </div>
-                    <button class="btn-submit" onclick="mettreAJourExploitation()">✓ Enregistrer</button>
+                    <button class="btn-submit" onclick="mettreAJourExploitation()"><i data-lucide="check" class="icon-sm"></i>Enregistrer</button>
 
                     <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
-                        <label class="form-label">📍 Position utilisée pour la météo</label>
+                        <label class="form-label">Position utilisée pour la météo</label>
                         <div id="reg-localisation-statut" style="font-size: 13px; margin-bottom: 10px;"></div>
-                        <button class="btn-submit" style="background: white; color: var(--primary); border: 1.5px solid var(--border);" onclick="localiserAvecGPS()">📍 Me localiser (GPS)</button>
+                        <button class="btn-secondary" onclick="localiserAvecGPS()"><i data-lucide="map-pin" class="icon-sm"></i>Me localiser (GPS)</button>
                     </div>
                 </div>
                 </div>
 
                 <div id="reglages-panneau-parcelles" style="display: none;">
                 <div class="form-card">
-                    <h3 style="margin-bottom: 16px;">🌱 Mes parcelles</h3>
+                    <h3 style="margin-bottom: 16px;"><i data-lucide="map" class="icon"></i>Mes parcelles</h3>
                     <div id="reglages-parcelles-list"></div>
                     <div data-admin-seulement style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
                         <div class="form-group">
@@ -868,15 +868,15 @@
 
                 <div id="reglages-panneau-produits" style="display: none;">
                 <div class="form-card" id="carte-produits-favoris" style="display: none;">
-                    <h3 style="margin-bottom: 4px;">⭐ Mes produits fréquents</h3>
+                    <h3 style="margin-bottom: 4px;"><i data-lucide="star" class="icon"></i>Mes produits fréquents</h3>
                     <p style="font-size: 12px; color: var(--text-light); margin-bottom: 10px;">Ceux que tu utilises souvent — marque-les avec l'étoile dans la liste ci-dessous pour les retrouver ici.</p>
                     <div id="reglages-produits-favoris-list"></div>
                 </div>
 
                 <div class="form-card">
-                    <h3 style="margin-bottom: 4px;">🧴 Mes produits</h3>
+                    <h3 style="margin-bottom: 4px;"><i data-lucide="flask-conical" class="icon"></i>Mes produits</h3>
                     <p style="font-size: 12px; color: var(--text-light); margin-bottom: 14px;">Les doses saisies ici sont juste tes réglages perso — vérifie toujours l'autorisation et la dose homologuée sur E-Phy.</p>
-                    <input type="text" id="reglages-produits-recherche" class="form-input" placeholder="🔍 Rechercher un produit..." style="margin-bottom: 10px;" oninput="filtrerReglagesProduits(this.value)">
+                    <input type="text" id="reglages-produits-recherche" class="form-input" placeholder="Rechercher un produit..." style="margin-bottom: 10px;" oninput="filtrerReglagesProduits(this.value)">
                     <div id="reglages-produits-list" style="max-height: 400px; overflow-y: auto;"></div>
                     <div data-admin-seulement style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
                         <div class="form-group">
@@ -894,7 +894,7 @@
                             </div>
                         </div>
                         <button class="btn-submit" onclick="ajouterProduit()">+ Ajouter le produit</button>
-                        <a href="https://ephy.anses.fr/" target="_blank" rel="noopener" style="display: block; text-align: center; margin-top: 10px; font-size: 12px; color: var(--primary); font-weight: 600;">🔍 Vérifier la dose et les usages sur E-Phy (Anses) ↗</a>
+                        <a href="https://ephy.anses.fr/" target="_blank" rel="noopener" class="btn-tertiary" style="justify-content: center; margin-top: 8px; font-size: 12px;">Vérifier la dose sur E-Phy (Anses)<i data-lucide="external-link" class="icon-sm"></i></a>
                     </div>
                 </div>
                 </div>
@@ -1014,9 +1014,9 @@
                 console.error('Erreur initialisation:', err);
                 document.getElementById('loading-page').innerHTML = `
                     <div class="auth-card">
-                        <p style="color: #a13b2f; font-size: 14px; margin-bottom: 12px;">⚠️ Impossible de charger PhytoLog</p>
+                        <p style="color: #a13b2f; font-size: 14px; margin-bottom: 12px; display:flex; align-items:center; justify-content:center; gap:6px;"><i data-lucide="alert-triangle" class="icon-sm"></i>Impossible de charger PhytoLog</p>
                         <p style="color: var(--text-light); font-size: 13px; margin-bottom: 16px;">${messageErreur(err)}</p>
-                        <button class="btn-submit" onclick="location.reload()">↻ Réessayer</button>
+                        <button class="btn-submit" onclick="location.reload()"><i data-lucide="refresh-cw" class="icon-sm"></i>Réessayer</button>
                     </div>
                 `;
             }
@@ -1123,10 +1123,10 @@
             statut.textContent = 'Localisation en cours...';
             try {
                 positionGPSSetup = await demanderPositionGPS();
-                statut.textContent = `✅ Position enregistrée (${positionGPSSetup.latitude}, ${positionGPSSetup.longitude})`;
+                statut.textContent = `Position enregistrée (${positionGPSSetup.latitude}, ${positionGPSSetup.longitude})`;
             } catch (err) {
                 positionGPSSetup = null;
-                statut.textContent = '⚠️ ' + messageErreur(err);
+                statut.textContent = messageErreur(err);
             }
         }
 
@@ -1163,9 +1163,9 @@
             if (currentExploitation && currentExploitation.latitude && currentExploitation.longitude) {
                 const lat = currentExploitation.latitude;
                 const lon = currentExploitation.longitude;
-                el.innerHTML = `✅ ${Number(lat).toFixed(4)}, ${Number(lon).toFixed(4)} · <a href="https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=13/${lat}/${lon}" target="_blank" rel="noopener" style="color: var(--primary); font-weight: 600;">Voir sur la carte ↗</a>`;
+                el.innerHTML = `${Number(lat).toFixed(4)}, ${Number(lon).toFixed(4)} · <a href="https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=13/${lat}/${lon}" target="_blank" rel="noopener" style="color: var(--primary); font-weight: 600;">Voir sur la carte</a>`;
             } else {
-                el.innerHTML = '⚠️ Position inconnue. Renseigne ta ville et ton code postal puis clique Enregistrer, ou utilise 📍 Me localiser. Sans position, la météo est indisponible.';
+                el.innerHTML = 'Position inconnue. Renseigne ta ville et ton code postal puis clique Enregistrer, ou utilise Me localiser. Sans position, la météo est indisponible.';
             }
         }
 
@@ -1275,7 +1275,7 @@
             if (!meteo) {
                 const sansPosition = !currentExploitation || !currentExploitation.latitude || !currentExploitation.longitude;
                 const raison = sansPosition
-                    ? '⚠️ Position de l\'exploitation inconnue : renseigne ta ville et ton code postal (ou utilise 📍 Me localiser) dans l\'onglet Réglages.'
+                    ? 'Position de l\'exploitation inconnue : renseigne ta ville et ton code postal (ou utilise Me localiser) dans l\'onglet Réglages.'
                     : 'Météo indisponible pour cette période (service momentanément injoignable).';
                 return `<div style="font-size: 12px; color: var(--text-light);">${raison}</div>`;
             }
@@ -1286,14 +1286,14 @@
                 : `${meteo.temperature_moyenne}°C (moyenne)`;
             const direction = meteo.vent_direction ? ` ${meteo.vent_direction}` : '';
             const pression = (meteo.pression_min !== undefined)
-                ? `<br>📊 Pression : <strong>${meteo.pression_min} à ${meteo.pression_max} hPa</strong>`
+                ? `<div style="display:flex; align-items:center; gap:6px; margin-top:5px;"><i data-lucide="gauge" class="icon-sm" style="color: var(--secondary);"></i>Pression : <strong>${meteo.pression_min} à ${meteo.pression_max} hPa</strong></div>`
                 : '';
             return `
                 <div style="font-size: 13px;">
-                    💨 Vent moyen : <strong>${meteo.vent_moyen} km/h${direction}</strong> (rafales max <strong>${meteo.rafale_max} km/h</strong>)<br>
-                    🌡️ Température : <strong>${temperature}</strong>
-                    ${pression}<br>
-                    🌧️ Pluie cumulée : <strong>${meteo.pluie_totale} mm</strong>
+                    <div style="display:flex; align-items:center; gap:6px;"><i data-lucide="wind" class="icon-sm" style="color: var(--secondary);"></i>Vent moyen : <strong>${meteo.vent_moyen} km/h${direction}</strong> (rafales max <strong>${meteo.rafale_max} km/h</strong>)</div>
+                    <div style="display:flex; align-items:center; gap:6px; margin-top:5px;"><i data-lucide="thermometer-sun" class="icon-sm" style="color: var(--secondary);"></i>Température : <strong>${temperature}</strong></div>
+                    ${pression}
+                    <div style="display:flex; align-items:center; gap:6px; margin-top:5px;"><i data-lucide="droplets" class="icon-sm" style="color: var(--secondary);"></i>Pluie cumulée : <strong>${meteo.pluie_totale} mm</strong></div>
                 </div>
             `;
         }
@@ -1440,7 +1440,7 @@
                 if (!data.session) {
                     // La confirmation par email est activée côté Supabase : pas de session tout de
                     // suite. On ne peut rien créer tant que ce n'est pas confirmé.
-                    statut.innerHTML = `<span style="color: var(--success);">✓ Compte créé ! Vérifie ta boîte mail, clique le lien de confirmation, puis reviens ici et connecte-toi (onglet "Se connecter") pour créer ton exploitation.</span>`;
+                    statut.innerHTML = `<span style="color: var(--success);">Compte créé ! Vérifie ta boîte mail, clique le lien de confirmation, puis reviens ici et connecte-toi (onglet "Se connecter") pour créer ton exploitation.</span>`;
                     bouton.disabled = false;
                     return;
                 }
@@ -1523,7 +1523,7 @@
             try {
                 const { error } = await supabaseClient.auth.resetPasswordForEmail(email);
                 if (error) throw error;
-                statut.innerHTML = `<span style="color: var(--success);">✓ Email envoyé à ${echapperHtml(email)} pour choisir un nouveau mot de passe.</span>`;
+                statut.innerHTML = `<span style="color: var(--success);">Email envoyé à ${echapperHtml(email)} pour choisir un nouveau mot de passe.</span>`;
             } catch (err) {
                 statut.innerHTML = `<span style="color: #a13b2f;">Erreur : ${echapperHtml(messageErreur(err))}</span>`;
             }
@@ -1537,7 +1537,7 @@
             try {
                 const { error } = await supabaseClient.auth.updateUser({ email, password });
                 if (error) throw error;
-                if (statut) statut.innerHTML = `<span style="color: var(--success);">✓ Compte sécurisé. Vérifie ta boîte mail pour confirmer ${echapperHtml(email)}.</span>`;
+                if (statut) statut.innerHTML = `<span style="color: var(--success);">Compte sécurisé. Vérifie ta boîte mail pour confirmer ${echapperHtml(email)}.</span>`;
             } catch (err) {
                 if (statut) statut.innerHTML = `<span style="color: #a13b2f;">Erreur : ${echapperHtml(messageErreur(err))}</span>`;
             }
@@ -1560,7 +1560,7 @@
             const blocSecuriser = document.getElementById('compte-email-formulaire');
             const blocChangerMdp = document.getElementById('compte-changer-mdp');
             if (currentUser.email) {
-                zone.innerHTML = `<span style="color: var(--success);">✓ Connecté avec ${echapperHtml(currentUser.email)} — accessible depuis n'importe quel appareil.</span>`;
+                zone.innerHTML = `<span style="color: var(--success);">Connecté avec ${echapperHtml(currentUser.email)} — accessible depuis n'importe quel appareil.</span>`;
                 if (blocSecuriser) blocSecuriser.style.display = 'none';
                 if (blocChangerMdp) blocChangerMdp.style.display = 'block';
             } else {
@@ -1602,7 +1602,7 @@
                     .from('profiles')
                     .upsert({ id: currentUser.id, prenom: prenom || null, nom: nom || null, date_naissance: naissance }, { onConflict: 'id' });
                 if (error) throw error;
-                statut.innerHTML = '<span style="color: var(--success);">✓ Profil enregistré</span>';
+                statut.innerHTML = '<span style="color: var(--success);">Profil enregistré</span>';
             } catch (err) {
                 statut.innerHTML = `<span style="color: #a13b2f;">Erreur : ${echapperHtml(messageErreur(err))}</span>`;
             }
@@ -1619,7 +1619,7 @@
                 if (error) throw error;
                 document.getElementById('nouveau-mdp-champ').value = '';
                 document.getElementById('nouveau-mdp2-champ').value = '';
-                statut.innerHTML = '<span style="color: var(--success);">✓ Mot de passe changé</span>';
+                statut.innerHTML = '<span style="color: var(--success);">Mot de passe changé</span>';
             } catch (err) {
                 statut.innerHTML = `<span style="color: #a13b2f;">Erreur : ${echapperHtml(messageErreur(err))}</span>`;
             }
@@ -1686,11 +1686,11 @@
                 document.getElementById('exploitation-name').textContent = currentExploitation.nom;
                 afficherStatutLocalisation();
 
-                let message = '✓ Exploitation mise à jour';
+                let message = 'Exploitation mise à jour';
                 if (localisationAChangee) {
                     message += loc
-                        ? `\n📍 Position trouvée : ${loc.libelle}`
-                        : '\n⚠️ Position introuvable avec cette ville / ce code postal. Vérifie l\'orthographe, ou utilise 📍 Me localiser.';
+                        ? `\nPosition trouvée : ${loc.libelle}`
+                        : '\nPosition introuvable avec cette ville / ce code postal. Vérifie l\'orthographe, ou utilise Me localiser.';
                 }
                 alert(message);
                 chargerMeteoActuelle();
@@ -1901,7 +1901,7 @@
                         <strong style="font-size: 13px;">${echapperHtml(p.nom)}</strong>
                         <div style="font-size: 11px; color: var(--text-light); margin-top: 2px;">${p.dose} ${p.unite || 'L/ha'}</div>
                     </div>
-                    <button class="btn-icon-delete" title="Retirer des favoris" style="color: var(--accent);" onclick="basculerFavoriProduit('${p.id}')">★</button>
+                    <button class="btn-icon-delete" title="Retirer des favoris" style="color: var(--warning);" onclick="basculerFavoriProduit('${p.id}')"><i data-lucide="star" class="icon-sm" style="fill: var(--warning);"></i></button>
                 </div>
             `).join('');
         }
@@ -2054,9 +2054,9 @@
                 <div class="item-card item-row">
                     <div>
                         <strong style="font-size: 13px;">${echapperHtml(c.email)}</strong>
-                        <div style="font-size: 11px; color: var(--text-light); margin-top: 2px;">${c.user_id ? '✓ actif' : '⏳ en attente de première connexion'}</div>
+                        <div style="font-size: 11px; color: var(--text-light); margin-top: 2px; display:flex; align-items:center; gap:4px;">${c.user_id ? '<i data-lucide="check" class="icon-sm" style="color:var(--secondary);"></i> actif' : '<i data-lucide="clock" class="icon-sm"></i> en attente de première connexion'}</div>
                     </div>
-                    <button class="btn-icon-delete" title="Retirer" onclick="retirerCollaborateur('${c.id}', '${c.email.replace(/'/g, "\\'")}')">✕</button>
+                    <button class="btn-icon-delete" title="Retirer" onclick="retirerCollaborateur('${c.id}', '${c.email.replace(/'/g, "\\'")}')"><i data-lucide="x" class="icon-sm"></i></button>
                 </div>
             `).join('');
         }
@@ -2320,7 +2320,7 @@
             const surface = parseFloat(document.getElementById('workflow-surface').value);
             const boite = document.getElementById('workflow-densité');
             if (volume > 0 && surface > 0) {
-                boite.innerHTML = `<strong>💧 Densité: ${formaterNombre(volume / surface, 1)} L/ha</strong>`;
+                boite.innerHTML = `<strong>Densité : ${formaterNombre(volume / surface, 1)} L/ha</strong>`;
                 boite.style.display = 'block';
             } else {
                 boite.style.display = 'none';
@@ -2339,7 +2339,7 @@
             cont.innerHTML = '';
 
             if (produits.length === 0) {
-                cont.innerHTML = `<p class="empty-note">Aucun produit configuré. Ajoute tes produits dans l'onglet 🔧 Réglages.</p>`;
+                cont.innerHTML = `<p class="empty-note">Aucun produit configuré. Ajoute tes produits dans l'onglet Réglages.</p>`;
                 document.getElementById('workflow-produits-compte').textContent = '';
                 return;
             }
@@ -2366,7 +2366,7 @@
                 div.style.flex = '1';
                 const nom = document.createElement('strong');
                 nom.style.fontSize = '13px';
-                nom.textContent = (produitsFavorisIds.has(prod.id) ? '★ ' : '') + prod.nom;
+                nom.textContent = prod.nom;
                 const detail = document.createElement('div');
                 detail.style.cssText = 'font-size: 11px; color: var(--text-light);';
                 detail.textContent = `${prod.dose} ${prod.unite || 'L/ha'} (défaut)`;
@@ -2470,7 +2470,7 @@
                 .join('');
             document.getElementById('workflow-resultats').innerHTML = `
                 <div class="info-box warning">
-                    <strong>📦 Quantités à préparer:</strong>
+                    <strong>Quantités à préparer :</strong>
                     ${lignes}
                 </div>
             `;
@@ -2627,7 +2627,7 @@
                 const zone = etiquette ? etiquette.querySelector('.heure-parcelle') : null;
                 if (!zone) return;
                 const p = gardees.find(x => x.nom === cb.dataset.parcelle);
-                zone.textContent = p ? '✓ ' + p.time : '';
+                zone.textContent = p ? p.time : '';
             });
 
             const attendu = workflowEnCours.surface;
@@ -2699,37 +2699,39 @@
 
             document.getElementById('workflow-recap').innerHTML = `
                 <div class="item-card" style="margin-bottom: 12px;">
-                    <strong>📅 Date</strong><div style="font-size: 13px; margin-top: 4px;">${w.debutTime.toLocaleDateString('fr-FR')}</div>
+                    <strong><i data-lucide="calendar" class="icon-sm"></i> Date</strong><div style="font-size: 13px; margin-top: 4px;">${w.debutTime.toLocaleDateString('fr-FR')}</div>
                 </div>
                 <div class="item-card" style="margin-bottom: 12px;">
-                    <strong>⏱️ Durée</strong><div style="font-size: 13px; margin-top: 4px;">${w.heureDebut} → ${w.heureFin} (${formaterDuree(w.duree)})</div>
+                    <strong><i data-lucide="clock" class="icon-sm"></i> Durée</strong><div style="font-size: 13px; margin-top: 4px;">${w.heureDebut} <i data-lucide="arrow-right" class="icon-sm"></i> ${w.heureFin} (${formaterDuree(w.duree)})</div>
                 </div>
                 <div class="item-card" style="margin-bottom: 12px;">
-                    <strong>📍 Parcelles traitées (${w.totalSurf.toFixed(2)} ha)</strong><div style="font-size: 12px; margin-top: 6px; color: var(--text-light);">${parcHtml}</div>
+                    <strong><i data-lucide="map-pin" class="icon-sm"></i> Parcelles traitées (${w.totalSurf.toFixed(2)} ha)</strong><div style="font-size: 12px; margin-top: 6px; color: var(--text-light);">${parcHtml}</div>
                 </div>
                 <div class="item-card" style="margin-bottom: 12px;">
-                    <strong>🧴 Produits</strong><div style="font-size: 12px; margin-top: 6px; color: var(--text-light);">${prodHtml}</div>
+                    <strong><i data-lucide="flask-conical" class="icon-sm"></i> Produits</strong><div style="font-size: 12px; margin-top: 6px; color: var(--text-light);">${prodHtml}</div>
                 </div>
                 <div class="item-card" style="margin-bottom: 12px;">
-                    <strong>📝 Note (optionnel)</strong>
+                    <strong><i data-lucide="pencil" class="icon-sm"></i> Note (optionnel)</strong>
                     <textarea id="workflow-note" class="form-input" rows="2" placeholder="Vent excessif, panne, remarque..." style="margin-top: 6px; resize: vertical;" oninput="workflowEnCours.note = this.value; sauvegarderBrouillon();">${echapperHtml(w.note || '')}</textarea>
                 </div>
                 <div class="item-card" id="carte-meteo-recap" style="margin-bottom: 12px;">
-                    <strong>🌦️ Météo pendant la pulvérisation</strong>
+                    <strong><i data-lucide="cloud-sun" class="icon-sm"></i> Météo pendant la pulvérisation</strong>
                     <div id="meteo-recap-contenu" style="margin-top: 6px;">
                         <span style="font-size: 12px; color: var(--text-light);">Récupération du bulletin météo...</span>
                     </div>
                 </div>
             `;
+            if (typeof lucide !== 'undefined') lucide.createIcons();
 
             const zoneMeteo = () => document.getElementById('meteo-recap-contenu');
 
             if (reprise && w.meteo) {
                 zoneMeteo().innerHTML = formaterBlocMeteo(w.meteo);
+                if (typeof lucide !== 'undefined') lucide.createIcons();
                 return;
             }
             if (navigator.onLine === false) {
-                zoneMeteo().innerHTML = '<div style="font-size: 12px; color: var(--text-light);">📴 Hors connexion : le bulletin météo sera ajouté automatiquement à l\'envoi.</div>';
+                zoneMeteo().innerHTML = '<div style="font-size: 12px; color: var(--text-light);">Hors connexion : le bulletin météo sera ajouté automatiquement à l\'envoi.</div>';
                 return;
             }
 
@@ -2741,6 +2743,7 @@
             sauvegarderBrouillon();
             const zone = zoneMeteo();
             if (zone) zone.innerHTML = formaterBlocMeteo(meteo);
+            if (typeof lucide !== 'undefined') lucide.createIcons();
         }
 
         // ---------- Enregistrement et envoi (fonctionne sans réseau) ----------
@@ -2916,7 +2919,8 @@
                     if (!res.ok) {
                         alert('Impossible d\'enregistrer le compte rendu : ' + res.message + '\nVérifie le réseau et réessaie.');
                         bouton.disabled = false;
-                        bouton.textContent = '✓ Valider & Archiver';
+                        bouton.innerHTML = '<i data-lucide="check" class="icon-sm"></i>Valider & Archiver';
+                        if (typeof lucide !== 'undefined') lucide.createIcons();
                         return;
                     }
                     w.termine = true;
@@ -2931,15 +2935,18 @@
                 afficherBrouillonAccueil();
                 afficherFileAttente();
 
-                let message;
+                let message, icone, couleurIcone;
                 if (envoye) {
-                    message = '<strong style="color: var(--success);">✓ Compte rendu archivé</strong>';
+                    message = '<strong style="color: var(--success);">Compte rendu archivé</strong>';
+                    icone = 'check-circle'; couleurIcone = 'var(--secondary)';
                 } else if (dernierEtatEnvoi && !dernierEtatEnvoi.reseau) {
-                    message = `<strong style="color: #a13b2f;">⚠️ Enregistré sur ton téléphone, mais l'envoi a échoué</strong>
+                    message = `<strong style="color: #a13b2f;">Enregistré sur ton téléphone, mais l'envoi a échoué</strong>
                                <div style="font-size: 12px; color: var(--text-light); margin-top: 6px;">${echapperHtml(dernierEtatEnvoi.message)}<br>Il sera réessayé automatiquement.</div>`;
+                    icone = 'alert-triangle'; couleurIcone = 'var(--warning)';
                 } else {
-                    message = `<strong style="color: var(--accent);">📴 Enregistré sur ton téléphone</strong>
+                    message = `<strong style="color: var(--accent);">Enregistré sur ton téléphone</strong>
                                <div style="font-size: 12px; color: var(--text-light); margin-top: 6px;">Il sera envoyé dès que le réseau revient. Rien n'est perdu.</div>`;
+                    icone = 'cloud-off'; couleurIcone = 'var(--warning)';
                 }
 
                 // On garde l'utilisateur sur l'étape 3, avec une confirmation claire et
@@ -2947,18 +2954,21 @@
                 document.getElementById('etape3-actions').style.display = 'none';
                 document.getElementById('workflow-confirmation').innerHTML = `
                     <div class="item-card" style="border-left-color: var(--success); text-align: center; padding: 16px;">
+                        <i data-lucide="${icone}" class="icon-lg" style="color: ${couleurIcone}; margin-bottom: 8px;"></i>
                         ${message}
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px;">
-                            <button class="btn-submit" onclick="genererPDFTraitement(dernierRapport)">📄 Télécharger le PDF</button>
-                            <button class="btn-submit" style="background: white; color: var(--primary); border: 1.5px solid var(--border);" onclick="terminerEtRetourAccueil()">🏠 Retour à l'accueil</button>
+                            <button class="btn-submit" onclick="genererPDFTraitement(dernierRapport)"><i data-lucide="download" class="icon-sm"></i>Télécharger le PDF</button>
+                            <button class="btn-secondary" onclick="terminerEtRetourAccueil()"><i data-lucide="home" class="icon-sm"></i>Retour à l'accueil</button>
                         </div>
                     </div>
                 `;
+                if (typeof lucide !== 'undefined') lucide.createIcons();
             } catch (err) {
                 console.error('Erreur sauvegarde:', err);
                 alert('Erreur: ' + messageErreur(err));
                 bouton.disabled = false;
-                bouton.textContent = '✓ Valider & Archiver';
+                bouton.innerHTML = '<i data-lucide="check" class="icon-sm"></i>Valider & Archiver';
+                if (typeof lucide !== 'undefined') lucide.createIcons();
             }
         }
 
@@ -3006,15 +3016,15 @@
 
             let html = '';
             if (enAttente.length > 0) {
-                html += `<div style="font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 8px;">⏳ EN ATTENTE D'ENVOI (${enAttente.length})</div>`;
+                html += `<div style="display:flex; align-items:center; gap:5px; font-size: 11.5px; font-weight: 700; color: var(--warning); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 8px;"><i data-lucide="clock" class="icon-sm"></i>En attente d'envoi (${enAttente.length})</div>`;
                 html += enAttente.map((t, i) => `
-                    <div class="item-card" style="border-left-color: var(--accent); background: #fffaf0;">
+                    <div class="item-card" style="border-left-color: var(--warning); background: var(--beige);">
                         <div class="item-row" style="margin-bottom: 6px;">
-                            <strong style="font-size: 14px; color: var(--primary);">📋 ${new Date(t.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</strong>
-                            <button class="btn-icon-delete" title="Télécharger le PDF" style="color: var(--primary);" onclick="genererPDFTraitementEnAttente(${i})">📄</button>
+                            <strong style="font-size: 14px; color: var(--primary); display:flex; align-items:center; gap:6px;"><i data-lucide="clipboard-list" class="icon-sm"></i>${new Date(t.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</strong>
+                            <button class="btn-icon-delete" title="Télécharger le PDF" style="color: var(--primary);" onclick="genererPDFTraitementEnAttente(${i})"><i data-lucide="download" class="icon-sm"></i></button>
                         </div>
-                        <div style="font-size: 12px; color: var(--text-light);">
-                            ⏱️ ${t.heure_debut} → ${t.heure_fin} <span style="opacity: 0.6;">(${formaterDuree(t.duree_minutes)})</span> · en attente d'envoi
+                        <div style="font-size: 12px; color: var(--text-light); display:flex; align-items:center; gap:5px;">
+                            <i data-lucide="clock" class="icon-sm"></i>${t.heure_debut} <i data-lucide="arrow-right" class="icon-sm"></i> ${t.heure_fin} <span style="opacity: 0.6;">(${formaterDuree(t.duree_minutes)})</span> · en attente d'envoi
                         </div>
                     </div>
                 `).join('');
@@ -3029,20 +3039,21 @@
             html += traitements.map((t, i) => `
                 <div class="item-card">
                     <div class="item-row" style="margin-bottom: 6px;">
-                        <strong style="font-size: 14px; color: var(--primary);">📋 ${new Date(t.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</strong>
-                        <button class="btn-icon-delete" title="Télécharger le PDF" style="color: var(--primary);" onclick="genererPDFTraitement(traitements[${i}])">📄</button>
+                        <strong style="font-size: 14px; color: var(--primary); display:flex; align-items:center; gap:6px;"><i data-lucide="clipboard-list" class="icon-sm"></i>${new Date(t.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</strong>
+                        <button class="btn-icon-delete" title="Télécharger le PDF" style="color: var(--primary);" onclick="genererPDFTraitement(traitements[${i}])"><i data-lucide="download" class="icon-sm"></i></button>
                     </div>
-                    <div style="font-size: 12px; color: var(--text-light);">
-                        ⏱️ ${t.heure_debut} → ${t.heure_fin} <span style="opacity: 0.6;">(${formaterDuree(t.duree_minutes)})</span>
+                    <div style="font-size: 12px; color: var(--text-light); display:flex; align-items:center; gap:5px;">
+                        <i data-lucide="clock" class="icon-sm"></i>${t.heure_debut} <i data-lucide="arrow-right" class="icon-sm"></i> ${t.heure_fin} <span style="opacity: 0.6;">(${formaterDuree(t.duree_minutes)})</span>
                     </div>
                     <div style="font-size: 13px; margin-top: 6px;">
                         <strong>${t.parcelles.length}</strong> parcelle${t.parcelles.length > 1 ? 's' : ''} · <strong>${t.surface_traitee.toFixed(2)} ha</strong>
                     </div>
-                    ${t.meteo ? `<div style="font-size: 11px; color: var(--text-light); margin-top: 6px;">💨 ${t.meteo.vent_moyen} km/h${t.meteo.vent_direction ? ' ' + t.meteo.vent_direction : ''} (rafales ${t.meteo.rafale_max}) · 🌧️ ${t.meteo.pluie_totale} mm</div>` : ''}
-                    ${t.notes ? `<div style="font-size: 12px; margin-top: 6px; font-style: italic;">📝 ${echapperHtml(t.notes)}</div>` : ''}
+                    ${t.meteo ? `<div style="font-size: 11px; color: var(--text-light); margin-top: 6px; display:flex; align-items:center; gap:5px;"><i data-lucide="wind" class="icon-sm"></i>${t.meteo.vent_moyen} km/h${t.meteo.vent_direction ? ' ' + t.meteo.vent_direction : ''} (rafales ${t.meteo.rafale_max}) · <i data-lucide="droplets" class="icon-sm"></i>${t.meteo.pluie_totale} mm</div>` : ''}
+                    ${t.notes ? `<div style="font-size: 12px; margin-top: 6px; font-style: italic; display:flex; gap:5px;"><i data-lucide="pencil" class="icon-sm" style="flex-shrink:0; margin-top:2px;"></i>${echapperHtml(t.notes)}</div>` : ''}
                 </div>
             `).join('');
             list.innerHTML = html;
+            if (typeof lucide !== 'undefined') lucide.createIcons();
         }
 
         function afficherReglages() {
@@ -3068,9 +3079,9 @@
                     <div class="item-card item-row">
                         <div>
                             <strong style="font-size: 13px;">${p.nom}</strong>
-                            <div style="font-size: 11px; color: var(--text-light); margin-top: 2px;">${p.surface} ha${p.cepage ? ' · 🍃 ' + p.cepage : ''}</div>
+                            <div style="font-size: 11px; color: var(--text-light); margin-top: 2px;">${p.surface} ha${p.cepage ? ' · ' + p.cepage : ''}</div>
                         </div>
-                        ${monRole === 'admin' ? `<button class="btn-icon-delete" title="Supprimer" onclick="supprimerParcelle('${p.id}', '${p.nom.replace(/'/g, "\\'")}')">✕</button>` : ''}
+                        ${monRole === 'admin' ? `<button class="btn-icon-delete" title="Supprimer" onclick="supprimerParcelle('${p.id}', '${p.nom.replace(/'/g, "\\'")}')"><i data-lucide="x" class="icon-sm"></i></button>` : ''}
                     </div>
                 `).join('');
             }
@@ -3089,12 +3100,12 @@
                     const estFavori = produitsFavorisIds.has(p.id);
                     return `
                     <div class="item-card item-row" data-recherche="${normaliserRecherche(p.nom + ' ' + (p.categorie || ''))}">
-                        <button class="btn-icon-delete" title="${estFavori ? 'Retirer des favoris' : 'Marquer comme favori'}" style="color: var(--accent); margin-right: 8px;" onclick="basculerFavoriProduit('${p.id}')">${estFavori ? '★' : '☆'}</button>
+                        <button class="btn-icon-delete" title="${estFavori ? 'Retirer des favoris' : 'Marquer comme favori'}" style="color: ${estFavori ? 'var(--warning)' : 'var(--text-muted)'}; margin-right: 8px;" onclick="basculerFavoriProduit('${p.id}')"><i data-lucide="star" class="icon-sm" style="${estFavori ? 'fill: var(--warning);' : ''}"></i></button>
                         <div style="flex: 1;">
                             <strong style="font-size: 13px;">${p.nom}</strong>
                             <div style="font-size: 11px; color: var(--text-light); margin-top: 2px;">${p.dose} ${p.unite || 'L/ha'}${p.exploitation_id ? '' : ' · partagé'}</div>
                         </div>
-                        ${(p.exploitation_id && monRole === 'admin') ? `<button class="btn-icon-delete" title="Supprimer" onclick="supprimerProduit('${p.id}', '${p.nom.replace(/'/g, "\\'")}')">✕</button>` : ''}
+                        ${(p.exploitation_id && monRole === 'admin') ? `<button class="btn-icon-delete" title="Supprimer" onclick="supprimerProduit('${p.id}', '${p.nom.replace(/'/g, "\\'")}')"><i data-lucide="x" class="icon-sm"></i></button>` : ''}
                     </div>
                 `;
                 }).join('');
@@ -3107,6 +3118,7 @@
             appliquerRestrictionsRole();
             afficherOngletReglages(ongletReglagesActuel);
             afficherProduitsFavoris();
+            if (typeof lucide !== 'undefined') lucide.createIcons();
         }
 
         // Filtre en direct la liste de gestion des produits (Réglages)
