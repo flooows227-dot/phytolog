@@ -280,6 +280,14 @@
         }
         .form-group { margin-bottom: 14px; }
 
+        /* Unité affichée distinctement dans le champ (pas noyée dans le label) */
+        .champ-avec-unite { position: relative; }
+        .champ-avec-unite input { padding-right: 42px; }
+        .champ-avec-unite .unite-suffixe {
+            position: absolute; right: 13px; top: 50%; transform: translateY(-50%);
+            font-size: 12px; font-weight: 600; color: var(--text-light); pointer-events: none;
+        }
+
         /* ===== BOUTONS — hiérarchie claire ===== */
         .btn-submit, .btn-primary {
             width: 100%;
@@ -578,8 +586,11 @@
                         <div id="setup-gps-statut" style="font-size: 12px; color: var(--text-light); margin-top: 6px;">Optionnel : plus précis que la ville, utile si tu es sur ton exploitation.</div>
                     </div>
                     <div class="form-group" style="text-align: left;">
-                        <label class="form-label">Surface totale (ha, optionnel)</label>
-                        <input type="number" id="setup-surface" class="form-input" step="0.1" placeholder="Ex: 19.5">
+                        <label class="form-label">Surface totale (optionnel)</label>
+                        <div class="champ-avec-unite">
+                            <input type="number" id="setup-surface" class="form-input" step="0.1" placeholder="Ex: 19.5">
+                            <span class="unite-suffixe">ha</span>
+                        </div>
                     </div>
                 </div>
 
@@ -692,12 +703,18 @@
                         </div>
 
                         <div class="form-group">
-                            <label class="form-label">Volume pulvérisateur (L)</label>
-                            <input type="number" id="workflow-volume" class="form-input" value="1000" min="100" step="100" onchange="calculerWorkflow()">
+                            <label class="form-label">Volume pulvérisateur</label>
+                            <div class="champ-avec-unite">
+                                <input type="number" id="workflow-volume" class="form-input" value="1000" min="100" step="100" onchange="calculerWorkflow()">
+                                <span class="unite-suffixe">L</span>
+                            </div>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Surface à traiter (ha)</label>
-                            <input type="number" id="workflow-surface" class="form-input" value="8" min="0.1" step="0.1" onchange="calculerWorkflow()">
+                            <label class="form-label">Surface à traiter</label>
+                            <div class="champ-avec-unite">
+                                <input type="number" id="workflow-surface" class="form-input" value="8" min="0.1" step="0.1" onchange="calculerWorkflow()">
+                                <span class="unite-suffixe">ha</span>
+                            </div>
                         </div>
                         <div id="workflow-densité" class="info-box warning" style="display: none;"></div>
 
@@ -986,8 +1003,11 @@
                             <input type="text" id="reg-parcelle-cepage" class="form-input" placeholder="Ex: Syrah">
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Surface (ha)</label>
-                            <input type="number" id="reg-parcelle-surface" class="form-input" step="0.01" placeholder="Ex: 1.20">
+                            <label class="form-label">Surface</label>
+                            <div class="champ-avec-unite">
+                                <input type="number" id="reg-parcelle-surface" class="form-input" step="0.01" placeholder="Ex: 1.20">
+                                <span class="unite-suffixe">ha</span>
+                            </div>
                         </div>
                         <button class="btn-submit" id="btn-parcelle-submit" onclick="validerFormulaireParcelle()"><i data-lucide="plus" class="icon-sm"></i>Ajouter la parcelle</button>
                         <button class="btn-tertiary" id="annuler-edition-parcelle" style="display: none; margin: 4px auto 0;" onclick="annulerEditionParcelle()">Annuler la modification</button>
@@ -3156,10 +3176,12 @@
                     <div class="item-card" style="border-left-color: var(--success); text-align: center; padding: 16px;">
                         <i data-lucide="${icone}" class="icon-lg" style="color: ${couleurIcone}; margin-bottom: 8px;"></i>
                         ${message}
+                        <div style="font-size: 12.5px; color: var(--text-light); margin-top: 6px;">${w.parcelles.length} parcelle${w.parcelles.length > 1 ? 's' : ''} · ${formaterNombre(w.totalSurf, 2)} ha</div>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px;">
                             <button class="btn-submit" onclick="genererPDFTraitement(dernierRapport)"><i data-lucide="download" class="icon-sm"></i>Télécharger le PDF</button>
                             <button class="btn-secondary" onclick="terminerEtRetourAccueil()"><i data-lucide="home" class="icon-sm"></i>Retour à l'accueil</button>
                         </div>
+                        <button class="btn-tertiary" style="margin: 6px auto 0;" onclick="switchView('histo')">Voir l'historique <i data-lucide="arrow-right" class="icon-sm"></i></button>
                     </div>
                 `;
                 if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -3610,14 +3632,15 @@
                             ${peutModifier ? `<button class="btn-icon-delete" title="Supprimer" onclick="supprimerTraitement('${t.id}')"><i data-lucide="trash-2" class="icon-sm"></i></button>` : ''}
                         </div>
                     </div>
-                    <div style="font-size: 12px; color: var(--text-light); display:flex; align-items:center; gap:5px;">
-                        <i data-lucide="clock" class="icon-sm"></i>${t.heure_debut} <i data-lucide="arrow-right" class="icon-sm"></i> ${t.heure_fin} <span style="opacity: 0.6;">(${formaterDuree(t.duree_minutes)})</span>
+                    <div style="font-size: 12px; color: var(--text-light); display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin-top: 3px;">
+                        <i data-lucide="clock" class="icon-sm"></i>${t.heure_debut}–${t.heure_fin} <span style="opacity: 0.6;">(${formaterDuree(t.duree_minutes)})</span>
+                        <span style="opacity: 0.5;">·</span>
+                        <strong style="color: var(--text);">${t.parcelles.length}</strong> parcelle${t.parcelles.length > 1 ? 's' : ''}
+                        <span style="opacity: 0.5;">·</span>
+                        <strong style="color: var(--text);">${t.surface_traitee.toFixed(2)} ha</strong>
                     </div>
-                    <div style="font-size: 13px; margin-top: 6px;">
-                        <strong>${t.parcelles.length}</strong> parcelle${t.parcelles.length > 1 ? 's' : ''} · <strong>${t.surface_traitee.toFixed(2)} ha</strong>
-                    </div>
-                    ${t.meteo ? `<div style="font-size: 11px; color: var(--text-light); margin-top: 6px; display:flex; align-items:center; gap:5px;"><i data-lucide="wind" class="icon-sm"></i>${t.meteo.vent_moyen} km/h${t.meteo.vent_direction ? ' ' + t.meteo.vent_direction : ''} (rafales ${t.meteo.rafale_max}) · <i data-lucide="droplets" class="icon-sm"></i>${t.meteo.pluie_totale} mm</div>` : ''}
-                    ${t.notes ? `<div style="font-size: 12px; margin-top: 6px; font-style: italic; display:flex; gap:5px;"><i data-lucide="pencil" class="icon-sm" style="flex-shrink:0; margin-top:2px;"></i>${echapperHtml(t.notes)}</div>` : ''}
+                    ${t.meteo ? `<div style="font-size: 11px; color: var(--text-light); margin-top: 4px; display:flex; align-items:center; gap:5px;"><i data-lucide="wind" class="icon-sm"></i>${t.meteo.vent_moyen} km/h${t.meteo.vent_direction ? ' ' + t.meteo.vent_direction : ''} (rafales ${t.meteo.rafale_max}) · <i data-lucide="droplets" class="icon-sm"></i>${t.meteo.pluie_totale} mm</div>` : ''}
+                    ${t.notes ? `<div style="font-size: 12px; margin-top: 4px; font-style: italic; display:flex; gap:5px;"><i data-lucide="pencil" class="icon-sm" style="flex-shrink:0; margin-top:2px;"></i>${echapperHtml(t.notes)}</div>` : ''}
                 </div>
             `;
             }).join('');
@@ -3829,7 +3852,14 @@
             // Bloc parcelles
             const parcCont = document.getElementById('reglages-parcelles-list');
             if (parcelles.length === 0) {
-                parcCont.innerHTML = '<p class="empty-note">Aucune parcelle pour l\'instant.</p>';
+                parcCont.innerHTML = `
+                    <div style="text-align: center; padding: 22px 10px;">
+                        <i data-lucide="map" class="icon-lg" style="color: var(--sauge);"></i>
+                        <div style="font-size: 13.5px; font-weight: 600; margin-top: 8px;">Aucune parcelle enregistrée</div>
+                        <div style="font-size: 12px; color: var(--text-light); margin-top: 2px;">Ajoute ta première parcelle ci-dessous pour commencer ton suivi.</div>
+                    </div>
+                `;
+                if (typeof lucide !== 'undefined') lucide.createIcons();
             } else {
                 parcCont.innerHTML = parcelles.map(p => `
                     <div class="item-card item-row">
@@ -3849,7 +3879,14 @@
             // Bloc produits
             const prodCont = document.getElementById('reglages-produits-list');
             if (produits.length === 0) {
-                prodCont.innerHTML = '<p class="empty-note">Aucun produit pour l\'instant.</p>';
+                prodCont.innerHTML = `
+                    <div style="text-align: center; padding: 22px 10px;">
+                        <i data-lucide="flask-conical" class="icon-lg" style="color: var(--sauge);"></i>
+                        <div style="font-size: 13.5px; font-weight: 600; margin-top: 8px;">Aucun produit enregistré</div>
+                        <div style="font-size: 12px; color: var(--text-light); margin-top: 2px;">Ajoute un produit ci-dessous, ou cherche dans le catalogue partagé.</div>
+                    </div>
+                `;
+                if (typeof lucide !== 'undefined') lucide.createIcons();
             } else {
                 const produitsTries = [...produits].sort((a, b) => {
                     const fa = produitsFavorisIds.has(a.id), fb = produitsFavorisIds.has(b.id);
