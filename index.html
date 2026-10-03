@@ -1119,6 +1119,22 @@
         let collaborateurs = [];      // liste des invitations/collaborateurs (admin uniquement)
         let produitsFavorisIds = new Set(); // id des produits marqués favoris pour cette exploitation
         let monPrenom = null; // prénom de l'utilisateur connecté, pour le message d'accueil
+        let logoDataURL = null; // logo PhytoLog préchargé en base64, pour l'insérer dans les PDF
+
+        async function precharcherLogoPDF() {
+            try {
+                const resp = await fetch('./logo-mark.png');
+                const blob = await resp.blob();
+                logoDataURL = await new Promise((resolve, reject) => {
+                    const lecteur = new FileReader();
+                    lecteur.onload = () => resolve(lecteur.result);
+                    lecteur.onerror = reject;
+                    lecteur.readAsDataURL(blob);
+                });
+            } catch (err) {
+                console.warn('Logo PDF non chargé (les comptes rendus resteront sans logo) :', err);
+            }
+        }
 
         // ===== STOCKAGE LOCAL (brouillon + comptes rendus en attente) =====
         // Tout passe par cet objet. Le jour où PhytoLog sera une application des magasins, on
@@ -1575,6 +1591,7 @@
             await chargerTraitements();
             await chargerCollaborateurs();
             await chargerSaisonsCloturees();
+            precharcherLogoPDF(); // pas besoin d'attendre : prêt bien avant le premier clic sur "Télécharger le PDF"
 
             afficherMenu();
             afficherHisto();
@@ -4024,105 +4041,145 @@
                 const { jsPDF } = window.jspdf;
                 const doc = new jsPDF({ unit: 'mm', format: 'a4' });
                 const marge = 18;
-                let y = 20;
                 const largeurUtile = 210 - marge * 2;
+                const basPage = 282;
+                let y = 18;
+                let page = 1;
+
+                const nouvellePage = () => {
+                    doc.addPage();
+                    page++;
+                    y = 20;
+                };
+                // Vérifie qu'il reste la place nécessaire ; sinon ouvre une nouvelle page
+                // AVANT d'écrire — pour ne plus jamais perdre de contenu en bas de page.
+                const reserver = (hauteur) => { if (y + hauteur > basPage) nouvellePage(); };
 
                 const ligne = (texte, taille, gras, couleur) => {
                     doc.setFontSize(taille);
                     doc.setFont('helvetica', gras ? 'bold' : 'normal');
-                    if (couleur) doc.setTextColor(...couleur); else doc.setTextColor(30, 30, 30);
+                    if (couleur) doc.setTextColor(...couleur); else doc.setTextColor(38, 48, 38);
                     doc.text(texte, marge, y);
                 };
+                // Une ligne qui se réserve d'abord la place, gère le retour à la ligne si le
+                // texte est trop long, et avance toujours d'une hauteur cohérente (interligne) —
+                // plus aucun espacement "au petit bonheur" dépendant du contenu.
+                const paragraphe = (texte, taille = 10, gras = false, couleur = null, interligne = 5.2) => {
+                    doc.setFontSize(taille);
+                    doc.setFont('helvetica', gras ? 'bold' : 'normal');
+                    const lignesTexte = doc.splitTextToSize(String(texte), largeurUtile);
+                    reserver(lignesTexte.length * interligne);
+                    if (couleur) doc.setTextColor(...couleur); else doc.setTextColor(38, 48, 38);
+                    doc.text(lignesTexte, marge, y);
+                    y += lignesTexte.length * interligne;
+                };
                 const sousTitre = (texte) => {
-                    y += 9;
-                    ligne(texte, 12, true, [45, 80, 22]);
-                    doc.setDrawColor(184, 134, 11);
+                    reserver(16);
+                    y += 8;
+                    ligne(texte, 12, true, [40, 85, 31]);
+                    doc.setDrawColor(111, 143, 61);
                     doc.line(marge, y + 2, marge + largeurUtile, y + 2);
                     y += 7;
                 };
 
-                // En-tête
-                ligne('PhytoLog', 22, true, [45, 80, 22]);
-                y += 6;
-                ligne('Compte rendu de traitement phytosanitaire', 11, false, [107, 107, 107]);
-                y += 2;
+                // ===== EN-TÊTE : logo + nom + slogan, encadré exploitation à droite =====
+                if (logoDataURL) {
+                    try { doc.addImage(logoDataURL, 'PNG', marge, y, 15, 15); } catch (err) { /* logo illisible : on continue sans */ }
+                }
+                doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.setTextColor(40, 85, 31);
+                doc.text('PhytoLog', marge + 19, y + 7);
+                doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(91, 107, 85);
+                doc.text('Suivi des traitements phytosanitaires', marge + 19, y + 12.5);
+
+                // Encadré exploitation, aligné à droite de l'en-tête
+                const exploit = currentExploitation || {};
+                const lignesExploit = [exploit.nom || '\u2014'];
+                if (exploit.region) lignesExploit.push(exploit.region);
+                if (exploit.siret) lignesExploit.push(`SIRET : ${exploit.siret}`);
+                lignesExploit.push(exploit.agriculture_biologique ? 'Agriculture biologique' : 'Conduite conventionnelle');
+
+                const largeurBox = 78;
+                const xBox = marge + largeurUtile - largeurBox;
+                const hauteurBox = 7 + (lignesExploit.length - 1) * 5 + 6;
+                doc.setFillColor(247, 245, 239);
+                doc.setDrawColor(227, 218, 200);
+                doc.roundedRect(xBox, y - 2, largeurBox, hauteurBox, 2, 2, 'FD');
+                let yBox = y + 4;
+                doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(40, 85, 31);
+                doc.text(lignesExploit[0], xBox + 4, yBox);
+                doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(91, 107, 85);
+                for (let i = 1; i < lignesExploit.length; i++) {
+                    yBox += 5;
+                    doc.text(lignesExploit[i], xBox + 4, yBox);
+                }
+
+                y += 20;
                 doc.setDrawColor(220, 220, 220);
-                doc.line(marge, y + 3, marge + largeurUtile, y + 3);
+                doc.line(marge, y, marge + largeurUtile, y);
+                y += 9;
+                ligne('Compte rendu de traitement phytosanitaire', 13, true, [38, 48, 38]);
+                y += 8;
 
-                sousTitre('Exploitation');
-                ligne(currentExploitation ? currentExploitation.nom : '—', 11, false);
-                if (currentExploitation && currentExploitation.region) {
-                    y += 6;
-                    ligne(currentExploitation.region, 10, false, [107, 107, 107]);
-                }
-                if (currentExploitation && currentExploitation.siret) {
-                    y += 6;
-                    ligne(`SIRET : ${currentExploitation.siret}`, 10, false, [107, 107, 107]);
-                }
-                y += 6;
-                ligne(`Conduite : ${currentExploitation && currentExploitation.agriculture_biologique ? 'Agriculture biologique' : 'Conventionnelle'}`, 10, false, [107, 107, 107]);
-
+                // ===== DATE ET HORAIRES =====
                 sousTitre('Date et horaires');
-                ligne(`Date : ${new Date(t.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}`, 11, false);
-                y += 6;
-                ligne(`Début : ${t.heure_debut}   →   Fin : ${t.heure_fin}   (durée : ${formaterDuree(t.duree_minutes)})`, 11, false);
+                paragraphe(`Date : ${new Date(t.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}`, 11);
+                paragraphe(`De ${t.heure_debut} à ${t.heure_fin}  (durée : ${formaterDuree(t.duree_minutes)})`, 11);
 
-                sousTitre(`Parcelles traitées (${Number(t.surface_traitee).toFixed(2)} ha au total)`);
+                // ===== PARCELLES =====
+                sousTitre(`Parcelles traitées (${formaterNombre(Number(t.surface_traitee), 2)} ha au total)`);
                 (t.parcelles || []).forEach(p => {
                     const parcelleConnue = (typeof parcelles !== 'undefined' ? parcelles : []).find(x => x.nom === p.nom);
                     const gps = parcelleConnue && parcelleConnue.latitude && parcelleConnue.longitude
-                        ? `  (${parcelleConnue.latitude}, ${parcelleConnue.longitude})` : '';
-                    ligne(`• ${p.nom} — ${p.time}${gps}`, 10, false);
-                    y += 5.5;
+                        ? `  \u2014  GPS ${parcelleConnue.latitude}, ${parcelleConnue.longitude}` : '';
+                    paragraphe(`\u2022 ${p.nom} (${p.time})${gps}`, 10);
                 });
 
+                // ===== PRODUITS =====
                 sousTitre('Produits appliqués');
                 Object.entries(t.produits || {}).forEach(([nom, entree]) => {
                     const produitConnu = (typeof produits !== 'undefined' ? produits : []).find(x => x.nom === nom);
-                    const amm = produitConnu && produitConnu.numero_amm ? `  (AMM ${produitConnu.numero_amm})` : '';
-                    ligne(`• ${nom}${amm} : ${formaterNombre(doseValeur(entree), 3)} ${doseUnite(entree)}`, 10, false);
-                    y += 5.5;
+                    const amm = produitConnu && produitConnu.numero_amm ? `  \u2014  AMM ${produitConnu.numero_amm}` : '';
+                    paragraphe(`\u2022 ${nom}${amm} : ${formaterNombre(doseValeur(entree), 3)} ${doseUnite(entree)}`, 10);
                 });
 
+                // ===== NOTE =====
                 if (t.notes) {
                     sousTitre('Note');
-                    const largeurTexte = largeurUtile;
-                    doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
-                    const lignesNote = doc.splitTextToSize(t.notes, largeurTexte);
-                    doc.text(lignesNote, marge, y);
-                    y += lignesNote.length * 5;
+                    paragraphe(t.notes, 10);
                 }
 
+                // ===== MÉTÉO =====
                 sousTitre('Bulletin météo pendant la pulvérisation');
                 if (t.meteo) {
                     const m = t.meteo;
                     const direction = m.vent_direction ? `  (${m.vent_direction})` : '';
-                    ligne(`Vent moyen : ${m.vent_moyen} km/h${direction}  —  rafales max : ${m.rafale_max} km/h`, 10, false);
-                    y += 5.5;
+                    paragraphe(`Vent moyen : ${m.vent_moyen} km/h${direction}  \u2014  rafales max : ${m.rafale_max} km/h`, 10);
                     const temperature = (m.temperature_min !== undefined)
-                        ? `${m.temperature_min}°C à ${m.temperature_max}°C`
-                        : `${m.temperature_moyenne}°C (moyenne)`;
-                    ligne(`Température : ${temperature}`, 10, false);
-                    y += 5.5;
+                        ? `${m.temperature_min}\u00b0C \u00e0 ${m.temperature_max}\u00b0C`
+                        : `${m.temperature_moyenne}\u00b0C (moyenne)`;
+                    paragraphe(`Temp\u00e9rature : ${temperature}`, 10);
                     if (m.pression_min !== undefined) {
-                        ligne(`Pression atmosphérique : ${m.pression_min} à ${m.pression_max} hPa`, 10, false);
-                        y += 5.5;
+                        paragraphe(`Pression atmosph\u00e9rique : ${m.pression_min} \u00e0 ${m.pression_max} hPa`, 10);
                     }
-                    ligne(`Pluie cumulée : ${m.pluie_totale} mm`, 10, false);
-                    y += 5.5;
-                    ligne('Source : Open-Meteo', 8, false, [150, 150, 150]);
+                    paragraphe(`Pluie cumul\u00e9e : ${m.pluie_totale} mm`, 10);
+                    paragraphe('Source : Open-Meteo', 8, false, [150, 150, 150]);
                 } else {
-                    ligne('Non disponible pour ce traitement.', 10, false, [150, 150, 150]);
+                    paragraphe('Non disponible pour ce traitement.', 10, false, [150, 150, 150]);
                 }
 
-                // Pied de page
-                y = 280;
-                doc.setDrawColor(220, 220, 220);
-                doc.line(marge, y - 5, marge + largeurUtile, y - 5);
-                ligne('Généré automatiquement par PhytoLog. Vérifie toujours l\'autorisation et la dose homologuée sur ephy.anses.fr', 8, false, [150, 150, 150]);
+                // ===== PIED DE PAGE (sur chaque page) =====
+                const nbPages = doc.internal.getNumberOfPages();
+                for (let p = 1; p <= nbPages; p++) {
+                    doc.setPage(p);
+                    doc.setDrawColor(220, 220, 220);
+                    doc.line(marge, basPage, marge + largeurUtile, basPage);
+                    doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(150, 150, 150);
+                    doc.text("G\u00e9n\u00e9r\u00e9 automatiquement par PhytoLog \u2014 v\u00e9rifie toujours l'autorisation et la dose homologu\u00e9e sur ephy.anses.fr", marge, basPage + 4.5);
+                    doc.text('Document \u00e0 conserver 5 ans (arr\u00eat\u00e9 du 24 d\u00e9cembre 2025 relatif aux registres phytosanitaires).', marge, basPage + 8.5);
+                    doc.text(`${p}/${nbPages}`, marge + largeurUtile - 8, basPage + 8.5);
+                }
 
-                doc.save(`phytolog-traitement-${t.date}.pdf`);
-            } catch (err) {
+                doc.save(`phytolog-traitement-${t.date}.pdf`);            } catch (err) {
                 console.error('Erreur génération PDF:', err);
                 alert('Erreur lors de la génération du PDF: ' + messageErreur(err));
             }
