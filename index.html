@@ -968,6 +968,11 @@
                         <input type="text" id="reg-exploit-nom" class="form-input">
                     </div>
                     <div class="form-group">
+                        <label class="form-label">SIRET</label>
+                        <input type="text" id="reg-exploit-siret" class="form-input" inputmode="numeric" maxlength="14" placeholder="14 chiffres">
+                        <div style="font-size: 11px; color: var(--text-light); margin-top: 4px;">Obligatoire sur le registre phytosanitaire depuis le 1ᵉʳ janvier 2026.</div>
+                    </div>
+                    <div class="form-group">
                         <label class="form-label">Ville</label>
                         <input type="text" id="reg-exploit-region" class="form-input">
                     </div>
@@ -976,9 +981,16 @@
                         <input type="text" id="reg-exploit-cp" class="form-input" inputmode="numeric" maxlength="5" placeholder="Ex: 83570">
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Surface totale (ha)</label>
-                        <input type="number" id="reg-exploit-surface" class="form-input" step="0.1">
+                        <label class="form-label">Surface totale</label>
+                        <div class="champ-avec-unite">
+                            <input type="number" id="reg-exploit-surface" class="form-input" step="0.1">
+                            <span class="unite-suffixe">ha</span>
+                        </div>
                     </div>
+                    <label class="checkbox-item" style="margin-bottom: 14px;">
+                        <input type="checkbox" id="reg-exploit-bio">
+                        <div><strong style="font-size: 13px;">Certifiée agriculture biologique</strong><div style="font-size: 11px; color: var(--text-light);">Conduite bio au moment des traitements — à renseigner si elle change en cours de conversion.</div></div>
+                    </label>
                     <button class="btn-submit" onclick="mettreAJourExploitation()"><i data-lucide="check" class="icon-sm"></i>Enregistrer</button>
 
                     <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
@@ -1007,6 +1019,23 @@
                             <div class="champ-avec-unite">
                                 <input type="number" id="reg-parcelle-surface" class="form-input" step="0.01" placeholder="Ex: 1.20">
                                 <span class="unite-suffixe">ha</span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Localisation GPS</label>
+                            <div style="font-size: 11px; color: var(--text-light); margin-bottom: 6px;">Obligatoire sur le registre phytosanitaire depuis le 1ᵉʳ janvier 2026 — saisis les coordonnées à la main, ou localise-toi directement depuis la parcelle.</div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                                <input type="number" id="reg-parcelle-latitude" class="form-input" step="0.0001" placeholder="Latitude">
+                                <input type="number" id="reg-parcelle-longitude" class="form-input" step="0.0001" placeholder="Longitude">
+                            </div>
+                            <button type="button" class="btn-secondary" style="margin-top: 8px;" onclick="localiserParcelleGPS()"><i data-lucide="map-pin" class="icon-sm"></i>Me localiser ici (depuis la parcelle)</button>
+                            <div id="parcelle-gps-statut" style="font-size: 12px; color: var(--text-light); margin-top: 6px;"></div>
+                            <button type="button" class="btn-tertiary" style="margin-top: 4px; padding-left: 0;" onclick="basculerTutoGPSParcelle()">Comment faire sur le terrain ? <i data-lucide="help-circle" class="icon-sm"></i></button>
+                            <div id="parcelle-gps-tuto" style="display: none; font-size: 12px; color: var(--text-light); background: var(--bg); border-radius: var(--radius-sm); padding: 10px 12px; margin-top: 6px; line-height: 1.6;">
+                                1. Rends-toi directement sur la parcelle (idéalement en son centre).<br>
+                                2. Ouvre PhytoLog sur ton téléphone, dans Réglages → Parcelles.<br>
+                                3. Clique sur "Me localiser ici" et autorise la position quand ton téléphone le demande.<br>
+                                4. Les coordonnées se remplissent toutes seules — il ne reste qu'à enregistrer.
                             </div>
                         </div>
                         <button class="btn-submit" id="btn-parcelle-submit" onclick="validerFormulaireParcelle()"><i data-lucide="plus" class="icon-sm"></i>Ajouter la parcelle</button>
@@ -1790,12 +1819,19 @@
                 return;
             }
             const nom = document.getElementById('reg-exploit-nom').value.trim();
+            const siret = document.getElementById('reg-exploit-siret').value.replace(/\s/g, '').trim();
             const region = document.getElementById('reg-exploit-region').value.trim();
             const codePostal = document.getElementById('reg-exploit-cp').value.trim();
             const surfaceRaw = document.getElementById('reg-exploit-surface').value;
+            const bio = document.getElementById('reg-exploit-bio').checked;
 
             if (!nom) {
                 alert('Le nom est obligatoire');
+                return;
+            }
+            if (siret && !/^\d{14}$/.test(siret)) {
+                alert('Le SIRET doit comporter 14 chiffres (ou laisse le champ vide pour l\'instant)');
+                document.getElementById('reg-exploit-siret').focus();
                 return;
             }
             if (codePostal && !/^\d{5}$/.test(codePostal)) {
@@ -1817,9 +1853,11 @@
 
                 const updatePayload = {
                     nom,
+                    siret: siret || null,
                     region: region || null,
                     code_postal: codePostal || null,
-                    surface_totale: surfaceRaw ? parseFloat(surfaceRaw) : null
+                    surface_totale: surfaceRaw ? parseFloat(surfaceRaw) : null,
+                    agriculture_biologique: bio
                 };
                 if (localisationAChangee) {
                     updatePayload.latitude = loc ? loc.latitude : null;
@@ -1874,7 +1912,7 @@
         // Valide et insère une parcelle en base. Retourne true si la parcelle a bien été créée.
         // Utilisée à la fois depuis Réglages et depuis l'étape 2 du traitement (pour ne jamais
         // avoir à quitter un traitement en cours juste pour ajouter une parcelle oubliée).
-        async function creerParcelleEnBase(nom, cepage, surfaceRaw) {
+        async function creerParcelleEnBase(nom, cepage, surfaceRaw, latitudeRaw, longitudeRaw) {
             if (!currentExploitation) {
                 alert('Ton exploitation n\'est pas encore chargée. Recharge la page (Cmd+R) et réessaie.');
                 return false;
@@ -1888,6 +1926,8 @@
                 alert('La surface doit être un nombre supérieur à 0');
                 return false;
             }
+            const latVal = latitudeRaw !== undefined && latitudeRaw !== '' ? parseFloat(latitudeRaw) : null;
+            const lngVal = longitudeRaw !== undefined && longitudeRaw !== '' ? parseFloat(longitudeRaw) : null;
             try {
                 const { error } = await supabaseClient
                     .from('parcelles')
@@ -1895,6 +1935,8 @@
                         nom,
                         cepage: cepage || null,
                         surface: surfaceVal,
+                        latitude: isFinite(latVal) ? latVal : null,
+                        longitude: isFinite(lngVal) ? lngVal : null,
                         exploitation_id: currentExploitation.id
                     }]);
                 if (error) throw error;
@@ -1917,6 +1959,8 @@
             document.getElementById('reg-parcelle-nom').value = p.nom;
             document.getElementById('reg-parcelle-cepage').value = p.cepage || '';
             document.getElementById('reg-parcelle-surface').value = p.surface;
+            document.getElementById('reg-parcelle-latitude').value = p.latitude ?? '';
+            document.getElementById('reg-parcelle-longitude').value = p.longitude ?? '';
             document.getElementById('btn-parcelle-submit').innerHTML = '<i data-lucide="check" class="icon-sm"></i>Enregistrer les modifications';
             document.getElementById('annuler-edition-parcelle').style.display = 'block';
             if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -1928,6 +1972,9 @@
             document.getElementById('reg-parcelle-nom').value = '';
             document.getElementById('reg-parcelle-cepage').value = '';
             document.getElementById('reg-parcelle-surface').value = '';
+            document.getElementById('reg-parcelle-latitude').value = '';
+            document.getElementById('reg-parcelle-longitude').value = '';
+            document.getElementById('parcelle-gps-statut').textContent = '';
             document.getElementById('btn-parcelle-submit').innerHTML = '<i data-lucide="plus" class="icon-sm"></i>Ajouter la parcelle';
             document.getElementById('annuler-edition-parcelle').style.display = 'none';
             if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -1941,15 +1988,23 @@
             const nom = document.getElementById('reg-parcelle-nom').value.trim();
             const cepage = document.getElementById('reg-parcelle-cepage').value.trim();
             const surfaceRaw = document.getElementById('reg-parcelle-surface').value;
+            const latitudeRaw = document.getElementById('reg-parcelle-latitude').value;
+            const longitudeRaw = document.getElementById('reg-parcelle-longitude').value;
 
             if (!nom) { alert('Le nom de la parcelle est obligatoire'); return; }
             const surfaceVal = parseFloat(surfaceRaw);
             if (!surfaceRaw || isNaN(surfaceVal) || surfaceVal <= 0) { alert('La surface doit être un nombre supérieur à 0'); return; }
+            const latVal = latitudeRaw !== '' ? parseFloat(latitudeRaw) : null;
+            const lngVal = longitudeRaw !== '' ? parseFloat(longitudeRaw) : null;
 
             try {
                 const { error } = await supabaseClient
                     .from('parcelles')
-                    .update({ nom, cepage: cepage || null, surface: surfaceVal })
+                    .update({
+                        nom, cepage: cepage || null, surface: surfaceVal,
+                        latitude: (latVal !== null && isFinite(latVal)) ? latVal : null,
+                        longitude: (lngVal !== null && isFinite(lngVal)) ? lngVal : null
+                    })
                     .eq('id', parcelleEnEdition);
                 if (error) throw error;
                 annulerEditionParcelle();
@@ -1964,13 +2019,39 @@
             const nom = document.getElementById('reg-parcelle-nom').value.trim();
             const cepage = document.getElementById('reg-parcelle-cepage').value.trim();
             const surfaceRaw = document.getElementById('reg-parcelle-surface').value;
+            const latitudeRaw = document.getElementById('reg-parcelle-latitude').value;
+            const longitudeRaw = document.getElementById('reg-parcelle-longitude').value;
 
-            if (await creerParcelleEnBase(nom, cepage, surfaceRaw)) {
+            if (await creerParcelleEnBase(nom, cepage, surfaceRaw, latitudeRaw, longitudeRaw)) {
                 document.getElementById('reg-parcelle-nom').value = '';
                 document.getElementById('reg-parcelle-cepage').value = '';
                 document.getElementById('reg-parcelle-surface').value = '';
+                document.getElementById('reg-parcelle-latitude').value = '';
+                document.getElementById('reg-parcelle-longitude').value = '';
+                document.getElementById('parcelle-gps-statut').textContent = '';
                 afficherReglages();
             }
+        }
+
+        // Remplit les champs latitude/longitude du formulaire parcelle avec la position
+        // actuelle de l'appareil — ne sauvegarde rien tout seul, il faut toujours cliquer
+        // sur Ajouter/Enregistrer ensuite (un seul chemin d'enregistrement, pas de surprise).
+        async function localiserParcelleGPS() {
+            const statut = document.getElementById('parcelle-gps-statut');
+            statut.textContent = 'Localisation en cours...';
+            try {
+                const position = await demanderPositionGPS();
+                document.getElementById('reg-parcelle-latitude').value = position.latitude;
+                document.getElementById('reg-parcelle-longitude').value = position.longitude;
+                statut.textContent = `Position relevée (${position.latitude}, ${position.longitude}) — n'oublie pas d'enregistrer.`;
+            } catch (err) {
+                statut.textContent = messageErreur(err);
+            }
+        }
+
+        function basculerTutoGPSParcelle() {
+            const tuto = document.getElementById('parcelle-gps-tuto');
+            tuto.style.display = tuto.style.display === 'none' ? 'block' : 'none';
         }
 
         function basculerFormulaireNouvelleParcelle() {
@@ -2032,6 +2113,8 @@
                     nom: p.nom,
                     dose: p.dose_defaut,
                     unite: p.unite || 'L/ha',
+                    categorie: p.categorie || null,
+                    numero_amm: p.numero_amm || null,
                     exploitation_id: p.exploitation_id
                 }));
             } catch (err) {
@@ -2045,6 +2128,8 @@
                         nom: p.nom,
                         dose: p.dose_defaut,
                         unite: p.unite || 'L/ha',
+                        categorie: p.categorie || null,
+                        numero_amm: p.numero_amm || null,
                         exploitation_id: p.exploitation_id ?? null
                     }));
                 } catch (err2) {
@@ -3841,6 +3926,10 @@
             // Bloc exploitation — ne pas écraser un champ en cours de frappe
             const nomInput = document.getElementById('reg-exploit-nom');
             if (document.activeElement !== nomInput) nomInput.value = currentExploitation.nom || '';
+            const siretInput = document.getElementById('reg-exploit-siret');
+            if (document.activeElement !== siretInput) siretInput.value = currentExploitation.siret || '';
+            const bioInput = document.getElementById('reg-exploit-bio');
+            if (document.activeElement !== bioInput) bioInput.checked = !!currentExploitation.agriculture_biologique;
             const regionInput = document.getElementById('reg-exploit-region');
             if (document.activeElement !== regionInput) regionInput.value = currentExploitation.region || '';
             const cpInput = document.getElementById('reg-exploit-cp');
@@ -3866,6 +3955,9 @@
                         <div>
                             <strong style="font-size: 13px;">${p.nom}</strong>
                             <div style="font-size: 11px; color: var(--text-light); margin-top: 2px;">${p.surface} ha${p.cepage ? ' · ' + p.cepage : ''}</div>
+                            <div style="font-size: 10.5px; margin-top: 2px; display: flex; align-items: center; gap: 4px; color: ${(p.latitude && p.longitude) ? 'var(--secondary)' : 'var(--warning)'};">
+                                <i data-lucide="map-pin" class="icon-sm"></i>${(p.latitude && p.longitude) ? 'Localisée' : 'Pas encore localisée'}
+                            </div>
                         </div>
                         ${monRole === 'admin' ? `
                         <div style="display: flex; gap: 6px; flex-shrink: 0;">
@@ -3900,7 +3992,7 @@
                         <button class="btn-icon-delete" title="${estFavori ? 'Retirer des favoris' : 'Marquer comme favori'}" style="color: ${estFavori ? 'var(--warning)' : 'var(--text-muted)'}; margin-right: 8px;" onclick="basculerFavoriProduit('${p.id}')"><i data-lucide="star" class="icon-sm" style="${estFavori ? 'fill: var(--warning);' : ''}"></i></button>
                         <div style="flex: 1;">
                             <strong style="font-size: 13px;">${p.nom}</strong>
-                            <div style="font-size: 11px; color: var(--text-light); margin-top: 2px;">${p.dose} ${p.unite || 'L/ha'}${p.exploitation_id ? '' : ' · partagé'}</div>
+                            <div style="font-size: 11px; color: var(--text-light); margin-top: 2px;">${p.dose} ${p.unite || 'L/ha'}${p.exploitation_id ? '' : ' · partagé'}${p.numero_amm ? ' · AMM ' + p.numero_amm : ''}</div>
                         </div>
                         ${(p.exploitation_id && monRole === 'admin') ? `<button class="btn-icon-delete" title="Supprimer" onclick="supprimerProduit('${p.id}', '${p.nom.replace(/'/g, "\\'")}')"><i data-lucide="x" class="icon-sm"></i></button>` : ''}
                     </div>
@@ -3963,6 +4055,12 @@
                     y += 6;
                     ligne(currentExploitation.region, 10, false, [107, 107, 107]);
                 }
+                if (currentExploitation && currentExploitation.siret) {
+                    y += 6;
+                    ligne(`SIRET : ${currentExploitation.siret}`, 10, false, [107, 107, 107]);
+                }
+                y += 6;
+                ligne(`Conduite : ${currentExploitation && currentExploitation.agriculture_biologique ? 'Agriculture biologique' : 'Conventionnelle'}`, 10, false, [107, 107, 107]);
 
                 sousTitre('Date et horaires');
                 ligne(`Date : ${new Date(t.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}`, 11, false);
@@ -3971,13 +4069,18 @@
 
                 sousTitre(`Parcelles traitées (${Number(t.surface_traitee).toFixed(2)} ha au total)`);
                 (t.parcelles || []).forEach(p => {
-                    ligne(`• ${p.nom} — ${p.time}`, 10, false);
+                    const parcelleConnue = (typeof parcelles !== 'undefined' ? parcelles : []).find(x => x.nom === p.nom);
+                    const gps = parcelleConnue && parcelleConnue.latitude && parcelleConnue.longitude
+                        ? `  (${parcelleConnue.latitude}, ${parcelleConnue.longitude})` : '';
+                    ligne(`• ${p.nom} — ${p.time}${gps}`, 10, false);
                     y += 5.5;
                 });
 
                 sousTitre('Produits appliqués');
                 Object.entries(t.produits || {}).forEach(([nom, entree]) => {
-                    ligne(`• ${nom} : ${formaterNombre(doseValeur(entree), 3)} ${doseUnite(entree)}`, 10, false);
+                    const produitConnu = (typeof produits !== 'undefined' ? produits : []).find(x => x.nom === nom);
+                    const amm = produitConnu && produitConnu.numero_amm ? `  (AMM ${produitConnu.numero_amm})` : '';
+                    ligne(`• ${nom}${amm} : ${formaterNombre(doseValeur(entree), 3)} ${doseUnite(entree)}`, 10, false);
                     y += 5.5;
                 });
 
