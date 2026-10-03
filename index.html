@@ -734,9 +734,34 @@
 
             <!-- HISTORIQUE -->
             <section id="histo" class="section">
-                <div class="form-card">
-                    <h3 style="margin-bottom: 16px;">Historique des traitements</h3>
-                    <div id="histo-list"></div>
+                <div style="display: flex; gap: 6px; margin-bottom: 12px;">
+                    <button type="button" class="nav-btn active" id="onglet-histo-liste" onclick="afficherOngletHisto('liste')"><i data-lucide="list" class="icon-sm"></i>Liste</button>
+                    <button type="button" class="nav-btn" id="onglet-histo-bilan" onclick="afficherOngletHisto('bilan')"><i data-lucide="bar-chart-3" class="icon-sm"></i>Bilan annuel</button>
+                </div>
+
+                <div id="histo-panneau-liste">
+                    <div class="form-card">
+                        <h3 style="margin-bottom: 16px;">Historique des traitements</h3>
+                        <div id="histo-list"></div>
+                    </div>
+                </div>
+
+                <div id="histo-panneau-bilan" style="display: none;">
+                    <div class="form-card">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
+                            <label class="form-label" style="margin-bottom: 0;">Saison</label>
+                            <select id="bilan-annee" class="form-select" style="width: auto;" onchange="afficherBilanAnnuel()"></select>
+                        </div>
+                        <div id="bilan-statut" style="font-size: 12.5px; margin-top: 8px;"></div>
+                    </div>
+
+                    <div id="bilan-contenu"></div>
+
+                    <div data-admin-seulement>
+                        <button class="btn-secondary" id="btn-cloturer-saison" style="margin-bottom: 8px;" onclick="demanderClotureSaison()"><i data-lucide="lock" class="icon-sm"></i>Clôturer cette saison</button>
+                        <button class="btn-secondary" id="btn-rouvrir-saison" style="display: none; margin-bottom: 8px;" onclick="demanderReouvertureSaison()"><i data-lucide="lock-open" class="icon-sm"></i>Rouvrir cette saison</button>
+                    </div>
+                    <button class="btn-tertiary" style="margin: 0 auto; display: flex;" onclick="genererPDFBilanAnnuel()"><i data-lucide="download" class="icon-sm"></i>Télécharger le bilan en PDF</button>
                 </div>
             </section>
 
@@ -1448,6 +1473,7 @@
             await chargerProduitsFavoris();
             await chargerTraitements();
             await chargerCollaborateurs();
+            await chargerSaisonsCloturees();
 
             afficherMenu();
             afficherHisto();
@@ -3123,6 +3149,253 @@
             if (item) genererPDFTraitement(item);
         }
 
+        // ===== BILAN ANNUEL + CLÔTURE DE SAISON =====
+        let saisonsCloturees = new Set(); // années (nombre) clôturées pour cette exploitation
+
+        async function chargerSaisonsCloturees() {
+            if (!currentExploitation) { saisonsCloturees = new Set(); return; }
+            try {
+                const { data, error } = await supabaseClient
+                    .from('saisons_cloturees')
+                    .select('annee')
+                    .eq('exploitation_id', currentExploitation.id);
+                if (error) throw error;
+                saisonsCloturees = new Set((data || []).map(r => r.annee));
+            } catch (err) {
+                console.error('Erreur chargement saisons clôturées:', err);
+                saisonsCloturees = new Set();
+            }
+        }
+
+        function afficherOngletHisto(nom) {
+            document.getElementById('histo-panneau-liste').style.display = nom === 'liste' ? 'block' : 'none';
+            document.getElementById('histo-panneau-bilan').style.display = nom === 'bilan' ? 'block' : 'none';
+            document.getElementById('onglet-histo-liste').classList[nom === 'liste' ? 'add' : 'remove']('active');
+            document.getElementById('onglet-histo-bilan').classList[nom === 'bilan' ? 'add' : 'remove']('active');
+            if (nom === 'bilan') { peuplerSelectAnnees(); afficherBilanAnnuel(); }
+        }
+
+        function peuplerSelectAnnees() {
+            const select = document.getElementById('bilan-annee');
+            const valeurActuelle = select.value;
+            const annees = [...new Set(traitements.map(t => new Date(t.date).getFullYear()))].sort((a, b) => b - a);
+            if (annees.length === 0) {
+                select.innerHTML = '<option value="">—</option>';
+                return;
+            }
+            select.innerHTML = annees.map(a => `<option value="${a}">${a}</option>`).join('');
+            if (annees.includes(parseInt(valeurActuelle, 10))) select.value = valeurActuelle;
+        }
+
+        // Calcule, pour une année donnée : le cumul par produit (quantité totale = dose x
+        // surface, sur toute l'exploitation) et le cumul par parcelle (dose cumulée reçue
+        // par CHAQUE parcelle, produit par produit — utile pour vérifier un plafond annuel
+        // réglementaire comme le cuivre).
+        function calculerBilanAnnuel(annee) {
+            const traitementsAnnee = traitements.filter(t => new Date(t.date).getFullYear() === annee);
+            const parParcelle = {};
+            const parProduit = {};
+
+            traitementsAnnee.forEach(t => {
+                const nomsParcelles = (t.parcelles || []).map(p => p.nom);
+                Object.entries(t.produits || {}).forEach(([nomProduit, entree]) => {
+                    const valeur = doseValeur(entree);
+                    const unite = doseUnite(entree);
+                    const uniteQuantite = unite === 'kg/ha' ? 'kg' : 'L';
+
+                    if (!parProduit[nomProduit]) parProduit[nomProduit] = { totalQuantite: 0, unite: uniteQuantite, nbTraitements: 0 };
+                    parProduit[nomProduit].totalQuantite += valeur * t.surface_traitee;
+                    parProduit[nomProduit].nbTraitements++;
+
+                    nomsParcelles.forEach(nomParcelle => {
+                        if (!parParcelle[nomParcelle]) parParcelle[nomParcelle] = { traitementsIds: new Set(), produits: {} };
+                        parParcelle[nomParcelle].traitementsIds.add(t.id);
+                        if (!parParcelle[nomParcelle].produits[nomProduit]) parParcelle[nomParcelle].produits[nomProduit] = { totalDose: 0, unite, nbApplications: 0 };
+                        parParcelle[nomParcelle].produits[nomProduit].totalDose += valeur;
+                        parParcelle[nomParcelle].produits[nomProduit].nbApplications++;
+                    });
+                });
+            });
+
+            Object.values(parParcelle).forEach(p => { p.nbTraitements = p.traitementsIds.size; delete p.traitementsIds; });
+            return { annee, parParcelle, parProduit, nbTraitementsTotal: traitementsAnnee.length };
+        }
+
+        function afficherBilanAnnuel() {
+            const select = document.getElementById('bilan-annee');
+            const annee = parseInt(select.value, 10);
+            const statut = document.getElementById('bilan-statut');
+            const btnCloturer = document.getElementById('btn-cloturer-saison');
+            const btnRouvrir = document.getElementById('btn-rouvrir-saison');
+            const cont = document.getElementById('bilan-contenu');
+
+            if (!annee) {
+                statut.innerHTML = '';
+                cont.innerHTML = '<p class="empty-note">Aucun traitement enregistré pour l\'instant.</p>';
+                btnCloturer.style.display = 'none';
+                btnRouvrir.style.display = 'none';
+                return;
+            }
+
+            const estCloturee = saisonsCloturees.has(annee);
+            statut.innerHTML = estCloturee
+                ? `<span style="color: var(--bordeaux); display: flex; align-items: center; gap: 6px;"><i data-lucide="lock" class="icon-sm"></i>Saison clôturée — traitements verrouillés</span>`
+                : `<span style="color: var(--text-light); display: flex; align-items: center; gap: 6px;"><i data-lucide="lock-open" class="icon-sm"></i>Saison ouverte</span>`;
+            btnCloturer.style.display = estCloturee ? 'none' : 'block';
+            btnRouvrir.style.display = estCloturee ? 'block' : 'none';
+
+            const bilan = calculerBilanAnnuel(annee);
+            if (bilan.nbTraitementsTotal === 0) {
+                cont.innerHTML = '<p class="empty-note">Aucun traitement pour cette saison.</p>';
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+                return;
+            }
+
+            const produitsHtml = Object.entries(bilan.parProduit)
+                .sort((a, b) => a[0].localeCompare(b[0]))
+                .map(([nom, d]) => `
+                    <div style="display: flex; justify-content: space-between; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border);">
+                        <span style="font-size: 12.5px;">${echapperHtml(nom)}</span>
+                        <strong style="font-size: 13px; text-align: right; flex-shrink: 0;">${formaterNombre(d.totalQuantite, 2)} ${d.unite} <span style="font-weight: 400; color: var(--text-light); font-size: 11px;">(${d.nbTraitements}×)</span></strong>
+                    </div>
+                `).join('');
+
+            const parcellesHtml = Object.entries(bilan.parParcelle)
+                .sort((a, b) => a[0].localeCompare(b[0]))
+                .map(([nom, d]) => `
+                    <div class="form-card" style="padding: 12px 14px;">
+                        <strong style="font-size: 13px;">${echapperHtml(nom)}</strong>
+                        <span style="font-size: 11px; color: var(--text-light); margin-left: 6px;">${d.nbTraitements} traitement${d.nbTraitements > 1 ? 's' : ''}</span>
+                        <div style="margin-top: 8px;">
+                            ${Object.entries(d.produits).map(([nomP, dp]) => `
+                                <div style="display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0;">
+                                    <span style="color: var(--text-light);">${echapperHtml(nomP)}</span>
+                                    <span>${formaterNombre(dp.totalDose, 2)} ${dp.unite} cumulé${dp.nbApplications > 1 ? ` (${dp.nbApplications}×)` : ''}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `).join('');
+
+            cont.innerHTML = `
+                <div class="form-card">
+                    <h3 style="margin-bottom: 10px;"><i data-lucide="flask-conical" class="icon-sm"></i>Total produits utilisés</h3>
+                    ${produitsHtml}
+                </div>
+                <h3 style="margin: 14px 0 8px; display: flex; align-items: center; gap: 7px; font-size: 14px; color: var(--primary);"><i data-lucide="map-pin" class="icon-sm"></i>Cumul par parcelle</h3>
+                ${parcellesHtml}
+            `;
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        // Clôturer verrouille tous les traitements de l'année (même pour l'admin, il faudra
+        // rouvrir la saison avant de pouvoir les corriger à nouveau) — deux confirmations
+        // distinctes, car c'est une action significative sur un registre réglementaire.
+        async function demanderClotureSaison() {
+            const annee = parseInt(document.getElementById('bilan-annee').value, 10);
+            if (!annee) return;
+            if (!confirm(`Clôturer la saison ${annee} ? Plus aucun traitement de ${annee} ne pourra être modifié ou supprimé tant que la saison n'est pas rouverte.`)) return;
+            if (!confirm(`Confirme une seconde fois : clôturer définitivement la saison ${annee} ?`)) return;
+            try {
+                const { error } = await supabaseClient
+                    .from('saisons_cloturees')
+                    .insert([{ exploitation_id: currentExploitation.id, annee, cloturee_par: currentUser.id }]);
+                if (error) throw error;
+                await chargerSaisonsCloturees();
+                afficherBilanAnnuel();
+                afficherHisto();
+            } catch (err) {
+                alert('Erreur: ' + messageErreur(err));
+            }
+        }
+
+        // Rouvrir est réversible et moins engageant que clôturer : une seule confirmation suffit.
+        async function demanderReouvertureSaison() {
+            const annee = parseInt(document.getElementById('bilan-annee').value, 10);
+            if (!annee) return;
+            if (!confirm(`Rouvrir la saison ${annee} ? Les traitements redeviendront modifiables et supprimables.`)) return;
+            try {
+                const { error } = await supabaseClient
+                    .from('saisons_cloturees')
+                    .delete()
+                    .eq('exploitation_id', currentExploitation.id)
+                    .eq('annee', annee);
+                if (error) throw error;
+                await chargerSaisonsCloturees();
+                afficherBilanAnnuel();
+                afficherHisto();
+            } catch (err) {
+                alert('Erreur: ' + messageErreur(err));
+            }
+        }
+
+        function genererPDFBilanAnnuel() {
+            const annee = parseInt(document.getElementById('bilan-annee').value, 10);
+            if (!annee) { alert('Aucune saison à exporter'); return; }
+            const bilan = calculerBilanAnnuel(annee);
+            try {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+                const marge = 18;
+                let y = 20;
+                const largeurUtile = 210 - marge * 2;
+
+                const ligne = (texte, taille, gras, couleur) => {
+                    doc.setFontSize(taille);
+                    doc.setFont('helvetica', gras ? 'bold' : 'normal');
+                    if (couleur) doc.setTextColor(...couleur); else doc.setTextColor(30, 30, 30);
+                    doc.text(texte, marge, y);
+                };
+                const sousTitre = (texte) => {
+                    y += 9;
+                    ligne(texte, 12, true, [40, 85, 31]);
+                    doc.setDrawColor(111, 143, 61);
+                    doc.line(marge, y + 2, marge + largeurUtile, y + 2);
+                    y += 7;
+                };
+                const sautDePageSiNecessaire = () => {
+                    if (y > 275) { doc.addPage(); y = 20; }
+                };
+
+                ligne('PhytoLog', 22, true, [40, 85, 31]);
+                y += 6;
+                ligne(`Bilan de la saison ${annee}`, 11, false, [91, 107, 85]);
+                y += 2;
+                doc.setDrawColor(220, 220, 220);
+                doc.line(marge, y + 3, marge + largeurUtile, y + 3);
+
+                sousTitre('Exploitation');
+                ligne(currentExploitation ? currentExploitation.nom : '—', 11, false);
+                y += 6;
+                ligne(`${bilan.nbTraitementsTotal} traitement${bilan.nbTraitementsTotal > 1 ? 's' : ''} enregistré${bilan.nbTraitementsTotal > 1 ? 's' : ''}${saisonsCloturees.has(annee) ? '  —  saison clôturée' : ''}`, 10, false, [91, 107, 85]);
+
+                sousTitre('Total produits utilisés');
+                Object.entries(bilan.parProduit).sort((a, b) => a[0].localeCompare(b[0])).forEach(([nom, d]) => {
+                    sautDePageSiNecessaire();
+                    ligne(`• ${nom} : ${formaterNombre(d.totalQuantite, 2)} ${d.unite} (${d.nbTraitements} traitement${d.nbTraitements > 1 ? 's' : ''})`, 10, false);
+                    y += 6;
+                });
+
+                sousTitre('Cumul par parcelle');
+                Object.entries(bilan.parParcelle).sort((a, b) => a[0].localeCompare(b[0])).forEach(([nom, d]) => {
+                    sautDePageSiNecessaire();
+                    ligne(`${nom}  (${d.nbTraitements} traitement${d.nbTraitements > 1 ? 's' : ''})`, 11, true, [40, 85, 31]);
+                    y += 6;
+                    Object.entries(d.produits).forEach(([nomP, dp]) => {
+                        sautDePageSiNecessaire();
+                        ligne(`   • ${nomP} : ${formaterNombre(dp.totalDose, 2)} ${dp.unite} cumulé`, 10, false);
+                        y += 5.5;
+                    });
+                    y += 2;
+                });
+
+                doc.save(`phytolog-bilan-${annee}.pdf`);
+            } catch (err) {
+                console.error('Erreur génération PDF bilan:', err);
+                alert('Erreur lors de la génération du PDF');
+            }
+        }
+
         function afficherHisto() {
             const list = document.getElementById('histo-list');
             const enAttente = lireFileAttenteExploitation();
@@ -3150,7 +3423,8 @@
             }
 
             html += traitements.map((t, i) => {
-                const peutModifier = monRole === 'admin' || t.created_by === currentUser.id;
+                const anneeTraitement = new Date(t.date).getFullYear();
+                const peutModifier = (monRole === 'admin' || t.created_by === currentUser.id) && !saisonsCloturees.has(anneeTraitement);
                 return `
                 <div class="item-card">
                     <div class="item-row" style="margin-bottom: 6px;">
