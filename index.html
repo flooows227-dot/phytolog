@@ -755,6 +755,14 @@
                         <div id="bilan-statut" style="font-size: 12.5px; margin-top: 8px;"></div>
                     </div>
 
+                    <div class="form-card">
+                        <h3 style="margin-bottom: 10px; font-size: 13px;"><i data-lucide="sliders-horizontal" class="icon-sm"></i>Contenu du bilan</h3>
+                        <label class="checkbox-item" style="margin-bottom: 6px;"><input type="checkbox" id="bilan-opt-produits" checked onchange="afficherBilanAnnuel()"><span style="font-size: 13px;">Produits utilisés (totaux)</span></label>
+                        <label class="checkbox-item" style="margin-bottom: 6px;"><input type="checkbox" id="bilan-opt-surface" checked onchange="afficherBilanAnnuel()"><span style="font-size: 13px;">Surface traitée cumulée</span></label>
+                        <label class="checkbox-item" style="margin-bottom: 6px;"><input type="checkbox" id="bilan-opt-parcelles" checked onchange="afficherBilanAnnuel()"><span style="font-size: 13px;">Détail parcelle par parcelle</span></label>
+                        <label class="checkbox-item"><input type="checkbox" id="bilan-opt-liste" onchange="afficherBilanAnnuel()"><span style="font-size: 13px;">Liste chronologique de chaque traitement</span></label>
+                    </div>
+
                     <div id="bilan-contenu"></div>
 
                     <div data-admin-seulement>
@@ -3218,7 +3226,17 @@
             });
 
             Object.values(parParcelle).forEach(p => { p.nbTraitements = p.traitementsIds.size; delete p.traitementsIds; });
-            return { annee, parParcelle, parProduit, nbTraitementsTotal: traitementsAnnee.length };
+            const surfaceTotaleTraitee = traitementsAnnee.reduce((s, t) => s + (t.surface_traitee || 0), 0);
+            return { annee, parParcelle, parProduit, nbTraitementsTotal: traitementsAnnee.length, surfaceTotaleTraitee, traitements: traitementsAnnee };
+        }
+
+        function optionsBilanCochees() {
+            return {
+                produits: document.getElementById('bilan-opt-produits').checked,
+                surface: document.getElementById('bilan-opt-surface').checked,
+                parcelles: document.getElementById('bilan-opt-parcelles').checked,
+                liste: document.getElementById('bilan-opt-liste').checked
+            };
         }
 
         function afficherBilanAnnuel() {
@@ -3251,40 +3269,67 @@
                 return;
             }
 
-            const produitsHtml = Object.entries(bilan.parProduit)
-                .sort((a, b) => a[0].localeCompare(b[0]))
-                .map(([nom, d]) => `
-                    <div style="display: flex; justify-content: space-between; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border);">
-                        <span style="font-size: 12.5px;">${echapperHtml(nom)}</span>
-                        <strong style="font-size: 13px; text-align: right; flex-shrink: 0;">${formaterNombre(d.totalQuantite, 2)} ${d.unite} <span style="font-weight: 400; color: var(--text-light); font-size: 11px;">(${d.nbTraitements}×)</span></strong>
-                    </div>
-                `).join('');
+            const opts = optionsBilanCochees();
+            let blocs = '';
 
-            const parcellesHtml = Object.entries(bilan.parParcelle)
-                .sort((a, b) => a[0].localeCompare(b[0]))
-                .map(([nom, d]) => `
-                    <div class="form-card" style="padding: 12px 14px;">
-                        <strong style="font-size: 13px;">${echapperHtml(nom)}</strong>
-                        <span style="font-size: 11px; color: var(--text-light); margin-left: 6px;">${d.nbTraitements} traitement${d.nbTraitements > 1 ? 's' : ''}</span>
-                        <div style="margin-top: 8px;">
-                            ${Object.entries(d.produits).map(([nomP, dp]) => `
-                                <div style="display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0;">
-                                    <span style="color: var(--text-light);">${echapperHtml(nomP)}</span>
-                                    <span>${formaterNombre(dp.totalDose, 2)} ${dp.unite} cumulé${dp.nbApplications > 1 ? ` (${dp.nbApplications}×)` : ''}</span>
-                                </div>
-                            `).join('')}
+            if (opts.surface) {
+                blocs += `
+                    <div class="form-card" style="padding: 12px 14px; text-align: center;">
+                        <div style="font-size: 22px; font-weight: 700; color: var(--primary);">${formaterNombre(bilan.surfaceTotaleTraitee, 2)} ha</div>
+                        <div style="font-size: 11px; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.4px;">Surface traitée cumulée (${bilan.nbTraitementsTotal} traitement${bilan.nbTraitementsTotal > 1 ? 's' : ''})</div>
+                    </div>
+                `;
+            }
+
+            if (opts.produits) {
+                const produitsHtml = Object.entries(bilan.parProduit)
+                    .sort((a, b) => a[0].localeCompare(b[0]))
+                    .map(([nom, d]) => `
+                        <div style="display: flex; justify-content: space-between; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border);">
+                            <span style="font-size: 12.5px;">${echapperHtml(nom)}</span>
+                            <strong style="font-size: 13px; text-align: right; flex-shrink: 0;">${formaterNombre(d.totalQuantite, 2)} ${d.unite} <span style="font-weight: 400; color: var(--text-light); font-size: 11px;">(${d.nbTraitements}×)</span></strong>
                         </div>
+                    `).join('');
+                blocs += `
+                    <div class="form-card">
+                        <h3 style="margin-bottom: 10px;"><i data-lucide="flask-conical" class="icon-sm"></i>Total produits utilisés</h3>
+                        ${produitsHtml}
+                    </div>
+                `;
+            }
+
+            if (opts.parcelles) {
+                const parcellesHtml = Object.entries(bilan.parParcelle)
+                    .sort((a, b) => a[0].localeCompare(b[0]))
+                    .map(([nom, d]) => `
+                        <div class="form-card" style="padding: 12px 14px;">
+                            <strong style="font-size: 13px;">${echapperHtml(nom)}</strong>
+                            <span style="font-size: 11px; color: var(--text-light); margin-left: 6px;">${d.nbTraitements} traitement${d.nbTraitements > 1 ? 's' : ''}</span>
+                            <div style="margin-top: 8px;">
+                                ${Object.entries(d.produits).map(([nomP, dp]) => `
+                                    <div style="display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0;">
+                                        <span style="color: var(--text-light);">${echapperHtml(nomP)}</span>
+                                        <span>${formaterNombre(dp.totalDose, 2)} ${dp.unite} cumulé${dp.nbApplications > 1 ? ` (${dp.nbApplications}×)` : ''}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `).join('');
+                blocs += `<h3 style="margin: 14px 0 8px; display: flex; align-items: center; gap: 7px; font-size: 14px; color: var(--primary);"><i data-lucide="map-pin" class="icon-sm"></i>Cumul par parcelle</h3>${parcellesHtml}`;
+            }
+
+            if (opts.liste) {
+                const listeHtml = [...bilan.traitements].sort((a, b) => a.date.localeCompare(b.date)).map(t => `
+                    <div class="item-card">
+                        <strong style="font-size: 12.5px;">${new Date(t.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</strong>
+                        <div style="font-size: 11.5px; color: var(--text-light); margin-top: 3px;">${(t.parcelles || []).map(p => echapperHtml(p.nom)).join(', ')} · ${formaterNombre(t.surface_traitee, 2)} ha</div>
+                        <div style="font-size: 11.5px; margin-top: 4px;">${Object.entries(t.produits || {}).map(([nom, e]) => `${echapperHtml(nom)} (${formaterNombre(doseValeur(e), 2)} ${doseUnite(e)})`).join(' · ')}</div>
                     </div>
                 `).join('');
+                blocs += `<h3 style="margin: 14px 0 8px; display: flex; align-items: center; gap: 7px; font-size: 14px; color: var(--primary);"><i data-lucide="list" class="icon-sm"></i>Liste chronologique</h3>${listeHtml}`;
+            }
 
-            cont.innerHTML = `
-                <div class="form-card">
-                    <h3 style="margin-bottom: 10px;"><i data-lucide="flask-conical" class="icon-sm"></i>Total produits utilisés</h3>
-                    ${produitsHtml}
-                </div>
-                <h3 style="margin: 14px 0 8px; display: flex; align-items: center; gap: 7px; font-size: 14px; color: var(--primary);"><i data-lucide="map-pin" class="icon-sm"></i>Cumul par parcelle</h3>
-                ${parcellesHtml}
-            `;
+            cont.innerHTML = blocs || '<p class="empty-note">Coche au moins une option ci-dessus pour afficher le bilan.</p>';
             if (typeof lucide !== 'undefined') lucide.createIcons();
         }
 
@@ -3364,30 +3409,56 @@
                 doc.setDrawColor(220, 220, 220);
                 doc.line(marge, y + 3, marge + largeurUtile, y + 3);
 
+                const opts = optionsBilanCochees();
+
                 sousTitre('Exploitation');
                 ligne(currentExploitation ? currentExploitation.nom : '—', 11, false);
                 y += 6;
                 ligne(`${bilan.nbTraitementsTotal} traitement${bilan.nbTraitementsTotal > 1 ? 's' : ''} enregistré${bilan.nbTraitementsTotal > 1 ? 's' : ''}${saisonsCloturees.has(annee) ? '  —  saison clôturée' : ''}`, 10, false, [91, 107, 85]);
 
-                sousTitre('Total produits utilisés');
-                Object.entries(bilan.parProduit).sort((a, b) => a[0].localeCompare(b[0])).forEach(([nom, d]) => {
-                    sautDePageSiNecessaire();
-                    ligne(`• ${nom} : ${formaterNombre(d.totalQuantite, 2)} ${d.unite} (${d.nbTraitements} traitement${d.nbTraitements > 1 ? 's' : ''})`, 10, false);
-                    y += 6;
-                });
+                if (opts.surface) {
+                    sousTitre('Surface traitée cumulée');
+                    ligne(`${formaterNombre(bilan.surfaceTotaleTraitee, 2)} ha au total sur la saison`, 11, false);
+                }
 
-                sousTitre('Cumul par parcelle');
-                Object.entries(bilan.parParcelle).sort((a, b) => a[0].localeCompare(b[0])).forEach(([nom, d]) => {
-                    sautDePageSiNecessaire();
-                    ligne(`${nom}  (${d.nbTraitements} traitement${d.nbTraitements > 1 ? 's' : ''})`, 11, true, [40, 85, 31]);
-                    y += 6;
-                    Object.entries(d.produits).forEach(([nomP, dp]) => {
+                if (opts.produits) {
+                    sousTitre('Total produits utilisés');
+                    Object.entries(bilan.parProduit).sort((a, b) => a[0].localeCompare(b[0])).forEach(([nom, d]) => {
                         sautDePageSiNecessaire();
-                        ligne(`   • ${nomP} : ${formaterNombre(dp.totalDose, 2)} ${dp.unite} cumulé`, 10, false);
-                        y += 5.5;
+                        ligne(`• ${nom} : ${formaterNombre(d.totalQuantite, 2)} ${d.unite} (${d.nbTraitements} traitement${d.nbTraitements > 1 ? 's' : ''})`, 10, false);
+                        y += 6;
                     });
-                    y += 2;
-                });
+                }
+
+                if (opts.parcelles) {
+                    sousTitre('Cumul par parcelle');
+                    Object.entries(bilan.parParcelle).sort((a, b) => a[0].localeCompare(b[0])).forEach(([nom, d]) => {
+                        sautDePageSiNecessaire();
+                        ligne(`${nom}  (${d.nbTraitements} traitement${d.nbTraitements > 1 ? 's' : ''})`, 11, true, [40, 85, 31]);
+                        y += 6;
+                        Object.entries(d.produits).forEach(([nomP, dp]) => {
+                            sautDePageSiNecessaire();
+                            ligne(`   • ${nomP} : ${formaterNombre(dp.totalDose, 2)} ${dp.unite} cumulé`, 10, false);
+                            y += 5.5;
+                        });
+                        y += 2;
+                    });
+                }
+
+                if (opts.liste) {
+                    sousTitre('Liste chronologique des traitements');
+                    [...bilan.traitements].sort((a, b) => a.date.localeCompare(b.date)).forEach(t => {
+                        sautDePageSiNecessaire();
+                        const dateTxt = new Date(t.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+                        const parcellesTxt = (t.parcelles || []).map(p => p.nom).join(', ');
+                        ligne(`${dateTxt}  —  ${parcellesTxt}  (${formaterNombre(t.surface_traitee, 2)} ha)`, 10, true, [40, 85, 31]);
+                        y += 5.5;
+                        sautDePageSiNecessaire();
+                        const produitsTxt = Object.entries(t.produits || {}).map(([nom, e]) => `${nom} (${formaterNombre(doseValeur(e), 2)} ${doseUnite(e)})`).join(' · ');
+                        ligne(`   ${produitsTxt}`, 9.5, false, [91, 107, 85]);
+                        y += 7;
+                    });
+                }
 
                 doc.save(`phytolog-bilan-${annee}.pdf`);
             } catch (err) {
