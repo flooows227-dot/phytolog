@@ -185,6 +185,8 @@
             overflow-y: auto;
             padding: 14px;
         }
+        .main-content-inner { max-width: 640px; margin: 0 auto; width: 100%; }
+        .nav-tabs-inner { max-width: 640px; margin: 0 auto; display: flex; gap: 4px; }
         .section { display: none; animation: fadeIn 0.2s ease; }
         .section.active { display: block; }
         @keyframes fadeIn {
@@ -196,6 +198,13 @@
             .nav-tabs { display: none; }
             .bottom-nav { display: block; }
             .main-content { padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px)); }
+        }
+
+        /* ===== Composition desktop : plus de respiration, contenu centré plutôt qu'étiré ===== */
+        @media (min-width: 900px) {
+            .main-content-inner, .nav-tabs-inner { max-width: 760px; }
+            .main-content { padding: 28px 20px; }
+            .form-card { padding: 20px; }
         }
 
         /* ===== CARDS ===== */
@@ -587,11 +596,13 @@
         </div>
 
         <div class="nav-tabs">
-            <button class="nav-btn active" onclick="switchView('menu')"><i data-lucide="home" class="icon-sm"></i>Accueil</button>
-            <button class="nav-btn" onclick="switchView('workflow')"><i data-lucide="beaker" class="icon-sm"></i>Traitement</button>
-            <button class="nav-btn" onclick="allerParcelles()"><i data-lucide="map" class="icon-sm"></i>Parcelles</button>
-            <button class="nav-btn" onclick="switchView('histo')"><i data-lucide="history" class="icon-sm"></i>Historique</button>
-            <button class="nav-btn" onclick="switchView('reglages')"><i data-lucide="settings" class="icon-sm"></i>Plus</button>
+            <div class="nav-tabs-inner">
+                <button class="nav-btn active" onclick="switchView('menu')"><i data-lucide="home" class="icon-sm"></i>Accueil</button>
+                <button class="nav-btn" onclick="switchView('workflow')"><i data-lucide="beaker" class="icon-sm"></i>Traitement</button>
+                <button class="nav-btn" onclick="allerParcelles()"><i data-lucide="map" class="icon-sm"></i>Parcelles</button>
+                <button class="nav-btn" onclick="switchView('histo')"><i data-lucide="history" class="icon-sm"></i>Historique</button>
+                <button class="nav-btn" onclick="switchView('reglages')"><i data-lucide="settings" class="icon-sm"></i>Plus</button>
+            </div>
         </div>
 
         <nav class="bottom-nav">
@@ -605,12 +616,13 @@
         </nav>
 
         <div class="main-content">
+            <div class="main-content-inner">
             <!-- MENU PRINCIPAL -->
             <section id="menu" class="section active">
                 <div id="carte-brouillon" style="display: none; margin-bottom: 12px;"></div>
                 <div id="bandeau-attente" style="display: none; margin-bottom: 12px;"></div>
 
-                <div class="form-card" id="carte-meteo-accueil" style="display: none; padding: 12px 14px;">
+                <div class="form-card" id="carte-meteo-accueil" style="display: none; padding: 12px 14px; margin-bottom: 12px;">
                     <div id="meteo-actuelle-contenu"></div>
                 </div>
 
@@ -677,7 +689,7 @@
                         <label class="form-label">Cocher les parcelles au fur et à mesure</label>
                         <div id="workflow-parcelles"></div>
 
-                        <button type="button" class="btn-submit" data-admin-seulement style="background: white; color: var(--primary); border: 1.5px solid var(--border); margin-top: 10px;" onclick="basculerFormulaireNouvelleParcelle()">+ Nouvelle parcelle</button>
+                        <button type="button" class="btn-secondary" data-admin-seulement style="margin-top: 10px;" onclick="basculerFormulaireNouvelleParcelle()"><i data-lucide="plus" class="icon-sm"></i>Nouvelle parcelle</button>
                         <div id="workflow-nouvelle-parcelle" style="display: none; margin-top: 10px; padding: 12px; background: var(--light-bg); border-radius: 10px;">
                             <div class="form-group">
                                 <label class="form-label">Nom de la parcelle</label>
@@ -726,6 +738,46 @@
                     <h3 style="margin-bottom: 16px;">Historique des traitements</h3>
                     <div id="histo-list"></div>
                 </div>
+            </section>
+
+            <!-- MODIFIER UN TRAITEMENT -->
+            <section id="modif-traitement" class="section">
+                <div class="form-card">
+                    <h3 style="margin-bottom: 12px;"><i data-lucide="pencil" class="icon-sm"></i> Modifier le traitement</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                        <div class="form-group">
+                            <label class="form-label">Date</label>
+                            <input type="date" id="modif-date" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Début</label>
+                            <input type="time" id="modif-heure-debut" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Fin</label>
+                            <input type="time" id="modif-heure-fin" class="form-input">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-card">
+                    <h3 style="margin-bottom: 10px;"><i data-lucide="map-pin" class="icon-sm"></i> Parcelles</h3>
+                    <div id="modif-parcelles"></div>
+                </div>
+
+                <div class="form-card">
+                    <h3 style="margin-bottom: 10px;"><i data-lucide="flask-conical" class="icon-sm"></i> Produits</h3>
+                    <input type="text" id="modif-produits-recherche" class="form-input" placeholder="Rechercher..." style="margin-bottom: 8px;" oninput="filtrerModifProduits(this.value)">
+                    <div id="modif-produits" style="max-height: 340px; overflow-y: auto;"></div>
+                </div>
+
+                <div class="form-card">
+                    <label class="form-label">Note</label>
+                    <textarea id="modif-note" class="form-input" rows="2" placeholder="Vent excessif, panne, remarque..."></textarea>
+                </div>
+
+                <button class="btn-primary" style="margin-bottom: 8px;" onclick="enregistrerModificationTraitement()"><i data-lucide="check" class="icon-sm"></i>Enregistrer les modifications</button>
+                <button class="btn-tertiary" onclick="annulerModificationTraitement()">Annuler</button>
             </section>
 
             <!-- RÉGLAGES -->
@@ -905,6 +957,7 @@
                     <a href="./cgu.html" style="color: var(--text-light);">CGU</a>
                 </div>
             </section>
+            </div>
         </div>
     </div>
 
@@ -2263,13 +2316,13 @@
             const b = lireBrouillon();
             vide.style.display = 'block';
             vide.innerHTML = b
-                ? `<h3 style="margin-bottom: 8px;">⏸️ Un traitement est en cours</h3>
-                   <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px;">
-                       <button class="btn-submit" onclick="reprendreBrouillon()">▶ Reprendre</button>
-                       <button class="btn-submit" style="background: white; color: var(--text-light); border: 1.5px solid var(--border);" onclick="abandonnerBrouillon()">Abandonner</button>
-                   </div>`
+                ? `<h3 style="margin-bottom: 4px; display: flex; align-items: center; gap: 7px;"><i data-lucide="pause-circle" class="icon" style="color: var(--secondary);"></i>Un traitement est en cours</h3>
+                   <p style="font-size: 12.5px; color: var(--text-light); margin-bottom: 14px;">Reprends-le là où tu l'as laissé, ou abandonne-le pour en démarrer un nouveau.</p>
+                   <button class="btn-primary" onclick="reprendreBrouillon()"><i data-lucide="play" class="icon-sm"></i>Reprendre</button>
+                   <button class="btn-tertiary" style="margin-top: 4px;" onclick="abandonnerBrouillon()"><i data-lucide="x" class="icon-sm"></i>Abandonner ce traitement</button>`
                 : `<h3 style="margin-bottom: 8px;">Aucun traitement en cours</h3>
-                   <button class="btn-submit" style="margin-top: 12px;" onclick="demarrerTraitement()">▶ Démarrer un traitement</button>`;
+                   <button class="btn-primary" style="margin-top: 12px;" onclick="demarrerTraitement()"><i data-lucide="play" class="icon-sm"></i>Démarrer un traitement</button>`;
+            if (typeof lucide !== 'undefined') lucide.createIcons();
         }
 
         // ---------- Étape 1 : préparation de la bouillie ----------
@@ -2698,23 +2751,29 @@
             const prodHtml = Object.entries(w.doses).map(([p, entree]) => `${echapperHtml(p)}: ${formaterNombre(doseValeur(entree), 3)} ${doseUnite(entree)}`).join('<br>');
 
             document.getElementById('workflow-recap').innerHTML = `
-                <div class="item-card" style="margin-bottom: 12px;">
-                    <strong><i data-lucide="calendar" class="icon-sm"></i> Date</strong><div style="font-size: 13px; margin-top: 4px;">${w.debutTime.toLocaleDateString('fr-FR')}</div>
+                <div class="form-card" style="margin-bottom: 12px; padding: 4px 16px;">
+                    <div style="display: flex; justify-content: space-between; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--border);">
+                        <span style="font-size: 12.5px; color: var(--text-light); display: flex; align-items: center; gap: 6px;"><i data-lucide="calendar" class="icon-sm"></i>Date</span>
+                        <strong style="font-size: 13px; text-align: right;">${w.debutTime.toLocaleDateString('fr-FR')}</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--border);">
+                        <span style="font-size: 12.5px; color: var(--text-light); display: flex; align-items: center; gap: 6px;"><i data-lucide="clock" class="icon-sm"></i>Durée</span>
+                        <strong style="font-size: 13px; text-align: right;">${w.heureDebut} → ${w.heureFin} (${formaterDuree(w.duree)})</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--border);">
+                        <span style="font-size: 12.5px; color: var(--text-light); display: flex; align-items: center; gap: 6px;"><i data-lucide="map-pin" class="icon-sm"></i>Parcelles (${w.totalSurf.toFixed(2)} ha)</span>
+                        <span style="font-size: 12.5px; text-align: right; max-width: 55%;">${parcHtml}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; gap: 10px; padding: 12px 0;">
+                        <span style="font-size: 12.5px; color: var(--text-light); display: flex; align-items: center; gap: 6px; flex-shrink: 0;"><i data-lucide="flask-conical" class="icon-sm"></i>Produits</span>
+                        <span style="font-size: 12.5px; text-align: right; max-width: 55%;">${prodHtml}</span>
+                    </div>
                 </div>
-                <div class="item-card" style="margin-bottom: 12px;">
-                    <strong><i data-lucide="clock" class="icon-sm"></i> Durée</strong><div style="font-size: 13px; margin-top: 4px;">${w.heureDebut} <i data-lucide="arrow-right" class="icon-sm"></i> ${w.heureFin} (${formaterDuree(w.duree)})</div>
+                <div class="form-card" style="margin-bottom: 12px;">
+                    <strong style="display: flex; align-items: center; gap: 6px; font-size: 13px;"><i data-lucide="pencil" class="icon-sm"></i>Note (optionnel)</strong>
+                    <textarea id="workflow-note" class="form-input" rows="2" placeholder="Vent excessif, panne, remarque..." style="margin-top: 8px; resize: vertical;" oninput="workflowEnCours.note = this.value; sauvegarderBrouillon();">${echapperHtml(w.note || '')}</textarea>
                 </div>
-                <div class="item-card" style="margin-bottom: 12px;">
-                    <strong><i data-lucide="map-pin" class="icon-sm"></i> Parcelles traitées (${w.totalSurf.toFixed(2)} ha)</strong><div style="font-size: 12px; margin-top: 6px; color: var(--text-light);">${parcHtml}</div>
-                </div>
-                <div class="item-card" style="margin-bottom: 12px;">
-                    <strong><i data-lucide="flask-conical" class="icon-sm"></i> Produits</strong><div style="font-size: 12px; margin-top: 6px; color: var(--text-light);">${prodHtml}</div>
-                </div>
-                <div class="item-card" style="margin-bottom: 12px;">
-                    <strong><i data-lucide="pencil" class="icon-sm"></i> Note (optionnel)</strong>
-                    <textarea id="workflow-note" class="form-input" rows="2" placeholder="Vent excessif, panne, remarque..." style="margin-top: 6px; resize: vertical;" oninput="workflowEnCours.note = this.value; sauvegarderBrouillon();">${echapperHtml(w.note || '')}</textarea>
-                </div>
-                <div class="item-card" id="carte-meteo-recap" style="margin-bottom: 12px;">
+                <div class="form-card" id="carte-meteo-recap" style="margin-bottom: 12px;">
                     <strong><i data-lucide="cloud-sun" class="icon-sm"></i> Météo pendant la pulvérisation</strong>
                     <div id="meteo-recap-contenu" style="margin-top: 6px;">
                         <span style="font-size: 12px; color: var(--text-light);">Récupération du bulletin météo...</span>
@@ -3036,11 +3095,17 @@
                 return;
             }
 
-            html += traitements.map((t, i) => `
+            html += traitements.map((t, i) => {
+                const peutModifier = monRole === 'admin' || t.created_by === currentUser.id;
+                return `
                 <div class="item-card">
                     <div class="item-row" style="margin-bottom: 6px;">
                         <strong style="font-size: 14px; color: var(--primary); display:flex; align-items:center; gap:6px;"><i data-lucide="clipboard-list" class="icon-sm"></i>${new Date(t.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</strong>
-                        <button class="btn-icon-delete" title="Télécharger le PDF" style="color: var(--primary);" onclick="genererPDFTraitement(traitements[${i}])"><i data-lucide="download" class="icon-sm"></i></button>
+                        <div style="display: flex; gap: 6px; flex-shrink: 0;">
+                            ${peutModifier ? `<button class="btn-icon-delete" title="Modifier" style="color: var(--secondary);" onclick="ouvrirModificationTraitement('${t.id}')"><i data-lucide="pencil" class="icon-sm"></i></button>` : ''}
+                            <button class="btn-icon-delete" title="Télécharger le PDF" style="color: var(--primary);" onclick="genererPDFTraitement(traitements[${i}])"><i data-lucide="download" class="icon-sm"></i></button>
+                            ${peutModifier ? `<button class="btn-icon-delete" title="Supprimer" onclick="supprimerTraitement('${t.id}')"><i data-lucide="trash-2" class="icon-sm"></i></button>` : ''}
+                        </div>
                     </div>
                     <div style="font-size: 12px; color: var(--text-light); display:flex; align-items:center; gap:5px;">
                         <i data-lucide="clock" class="icon-sm"></i>${t.heure_debut} <i data-lucide="arrow-right" class="icon-sm"></i> ${t.heure_fin} <span style="opacity: 0.6;">(${formaterDuree(t.duree_minutes)})</span>
@@ -3051,9 +3116,188 @@
                     ${t.meteo ? `<div style="font-size: 11px; color: var(--text-light); margin-top: 6px; display:flex; align-items:center; gap:5px;"><i data-lucide="wind" class="icon-sm"></i>${t.meteo.vent_moyen} km/h${t.meteo.vent_direction ? ' ' + t.meteo.vent_direction : ''} (rafales ${t.meteo.rafale_max}) · <i data-lucide="droplets" class="icon-sm"></i>${t.meteo.pluie_totale} mm</div>` : ''}
                     ${t.notes ? `<div style="font-size: 12px; margin-top: 6px; font-style: italic; display:flex; gap:5px;"><i data-lucide="pencil" class="icon-sm" style="flex-shrink:0; margin-top:2px;"></i>${echapperHtml(t.notes)}</div>` : ''}
                 </div>
-            `).join('');
+            `;
+            }).join('');
             list.innerHTML = html;
             if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        // ===== MODIFIER / SUPPRIMER UN TRAITEMENT DÉJÀ VALIDÉ =====
+        let editEnCours = null; // { id, parcelles: Set<nom>, doses: {nom: {valeur, unite}} }
+
+        async function supprimerTraitement(id) {
+            if (!confirm('Supprimer définitivement ce traitement ? Cette action est irréversible.')) return;
+            try {
+                const { error } = await supabaseClient.from('traitements').delete().eq('id', id);
+                if (error) throw error;
+                await chargerTraitements();
+                afficherHisto();
+            } catch (err) {
+                alert('Erreur: ' + messageErreur(err));
+            }
+        }
+
+        function ouvrirModificationTraitement(id) {
+            const t = traitements.find(x => x.id === id);
+            if (!t) return;
+            editEnCours = {
+                id: t.id,
+                parcelles: new Set((t.parcelles || []).map(p => p.nom)),
+                doses: {}
+            };
+            Object.entries(t.produits || {}).forEach(([nom, entree]) => {
+                editEnCours.doses[nom] = { valeur: doseValeur(entree), unite: doseUnite(entree) };
+            });
+            document.getElementById('modif-date').value = t.date;
+            document.getElementById('modif-heure-debut').value = t.heure_debut;
+            document.getElementById('modif-heure-fin').value = t.heure_fin;
+            document.getElementById('modif-note').value = t.notes || '';
+            afficherModifParcelles();
+            afficherModifProduits();
+            switchView('modif-traitement');
+        }
+
+        function afficherModifParcelles() {
+            const cont = document.getElementById('modif-parcelles');
+            cont.innerHTML = '';
+            if (parcelles.length === 0) {
+                cont.innerHTML = '<p class="empty-note">Aucune parcelle.</p>';
+                return;
+            }
+            parcelles.forEach(p => {
+                const label = document.createElement('label');
+                label.className = 'checkbox-item';
+                const chk = document.createElement('input');
+                chk.type = 'checkbox';
+                chk.dataset.parcelle = p.nom;
+                chk.checked = editEnCours.parcelles.has(p.nom);
+                chk.onchange = () => {
+                    if (chk.checked) editEnCours.parcelles.add(p.nom); else editEnCours.parcelles.delete(p.nom);
+                };
+                const div = document.createElement('div');
+                div.style.flex = '1';
+                div.innerHTML = `<strong style="font-size: 13px;">${echapperHtml(p.nom)}</strong><div style="font-size: 11px; color: var(--text-light);">${p.surface} ha${p.cepage ? ' · ' + echapperHtml(p.cepage) : ''}</div>`;
+                label.appendChild(chk); label.appendChild(div);
+                cont.appendChild(label);
+            });
+        }
+
+        function afficherModifProduits() {
+            const cont = document.getElementById('modif-produits');
+            const recherche = document.getElementById('modif-produits-recherche');
+            if (recherche) recherche.value = '';
+            cont.innerHTML = '';
+            if (produits.length === 0) {
+                cont.innerHTML = '<p class="empty-note">Aucun produit configuré.</p>';
+                return;
+            }
+            produits.forEach(prod => {
+                const dejaChoisi = editEnCours.doses[prod.nom];
+                const label = document.createElement('label');
+                label.className = 'checkbox-item';
+                label.dataset.recherche = normaliserRecherche(prod.nom + ' ' + (prod.categorie || ''));
+
+                const chk = document.createElement('input');
+                chk.type = 'checkbox';
+                chk.dataset.produit = prod.nom;
+                chk.checked = !!dejaChoisi;
+
+                const div = document.createElement('div');
+                div.style.flex = '1';
+                const nom = document.createElement('strong');
+                nom.style.fontSize = '13px';
+                nom.textContent = prod.nom;
+                div.appendChild(nom);
+
+                const doseWrap = document.createElement('div');
+                doseWrap.style.cssText = 'display: flex; align-items: center; gap: 6px; margin-top: 4px;';
+                const doseInput = document.createElement('input');
+                doseInput.type = 'number'; doseInput.step = '0.01'; doseInput.min = '0';
+                doseInput.value = dejaChoisi ? dejaChoisi.valeur : prod.dose;
+                doseInput.disabled = !dejaChoisi;
+                doseInput.style.cssText = 'width: 80px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px;';
+                doseInput.onclick = (e) => e.stopPropagation();
+                const uniteLabel = document.createElement('span');
+                uniteLabel.style.cssText = 'font-size: 11px; color: var(--text-light);';
+                uniteLabel.textContent = dejaChoisi ? dejaChoisi.unite : (prod.unite || 'L/ha');
+                doseWrap.appendChild(doseInput); doseWrap.appendChild(uniteLabel);
+                div.appendChild(doseWrap);
+
+                chk.onchange = () => {
+                    if (chk.checked) {
+                        const valeur = parseFloat(doseInput.value) || prod.dose;
+                        editEnCours.doses[prod.nom] = { valeur, unite: prod.unite || 'L/ha' };
+                        doseInput.disabled = false;
+                        doseInput.value = valeur;
+                        uniteLabel.textContent = editEnCours.doses[prod.nom].unite;
+                    } else {
+                        delete editEnCours.doses[prod.nom];
+                        doseInput.disabled = true;
+                    }
+                };
+                doseInput.oninput = () => {
+                    if (editEnCours.doses[prod.nom]) {
+                        const v = parseFloat(doseInput.value);
+                        if (isFinite(v) && v > 0) editEnCours.doses[prod.nom].valeur = v;
+                    }
+                };
+
+                label.appendChild(chk); label.appendChild(div);
+                cont.appendChild(label);
+            });
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        function filtrerModifProduits(texte) {
+            const requete = normaliserRecherche(texte.trim());
+            Array.from(document.querySelectorAll('#modif-produits .checkbox-item')).forEach(label => {
+                const chk = label.querySelector('input[type="checkbox"]');
+                const correspond = !requete || (label.dataset.recherche || '').includes(requete);
+                label.style.display = (correspond || (chk && chk.checked)) ? 'flex' : 'none';
+            });
+        }
+
+        function annulerModificationTraitement() {
+            editEnCours = null;
+            switchView('histo');
+        }
+
+        async function enregistrerModificationTraitement() {
+            if (!editEnCours) return;
+            const date = document.getElementById('modif-date').value;
+            const heureDebut = document.getElementById('modif-heure-debut').value;
+            const heureFin = document.getElementById('modif-heure-fin').value;
+            const note = document.getElementById('modif-note').value.trim();
+
+            if (!date || !heureDebut || !heureFin) { alert('Date et heures obligatoires'); return; }
+            if (editEnCours.parcelles.size === 0) { alert('Sélectionne au moins une parcelle'); return; }
+            if (Object.keys(editEnCours.doses).length === 0) { alert('Sélectionne au moins un produit'); return; }
+
+            let duree = (parseInt(heureFin.split(':')[0]) * 60 + parseInt(heureFin.split(':')[1]))
+                      - (parseInt(heureDebut.split(':')[0]) * 60 + parseInt(heureDebut.split(':')[1]));
+            if (duree <= 0) duree += 24 * 60;
+
+            const parcellesChoisies = parcelles.filter(p => editEnCours.parcelles.has(p.nom));
+            const surfaceTotale = parcellesChoisies.reduce((s, p) => s + p.surface, 0);
+            const parcellesJSON = parcellesChoisies.map(p => ({ nom: p.nom, time: heureDebut }));
+
+            try {
+                const { error } = await supabaseClient
+                    .from('traitements')
+                    .update({
+                        date, heure_debut: heureDebut, heure_fin: heureFin, duree_minutes: duree,
+                        parcelles: parcellesJSON, produits: editEnCours.doses,
+                        surface_traitee: surfaceTotale, notes: note || null
+                    })
+                    .eq('id', editEnCours.id);
+                if (error) throw error;
+                editEnCours = null;
+                await chargerTraitements();
+                afficherHisto();
+                switchView('histo');
+            } catch (err) {
+                alert('Erreur: ' + messageErreur(err));
+            }
         }
 
         function afficherReglages() {
