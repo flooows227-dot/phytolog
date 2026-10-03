@@ -913,7 +913,8 @@
                             <label class="form-label">Surface (ha)</label>
                             <input type="number" id="reg-parcelle-surface" class="form-input" step="0.01" placeholder="Ex: 1.20">
                         </div>
-                        <button class="btn-submit" onclick="ajouterParcelle()">+ Ajouter la parcelle</button>
+                        <button class="btn-submit" id="btn-parcelle-submit" onclick="validerFormulaireParcelle()"><i data-lucide="plus" class="icon-sm"></i>Ajouter la parcelle</button>
+                        <button class="btn-tertiary" id="annuler-edition-parcelle" style="display: none; margin: 4px auto 0;" onclick="annulerEditionParcelle()">Annuler la modification</button>
                     </div>
                 </div>
                 </div>
@@ -1804,6 +1805,59 @@
                 console.error('Erreur ajout parcelle:', err);
                 alert('Erreur: ' + messageErreur(err));
                 return false;
+            }
+        }
+
+        // ===== MODIFIER UNE PARCELLE EXISTANTE =====
+        let parcelleEnEdition = null; // id de la parcelle en cours de modification, ou null
+
+        function modifierParcelleExistante(id) {
+            const p = parcelles.find(x => x.id === id);
+            if (!p) return;
+            parcelleEnEdition = id;
+            document.getElementById('reg-parcelle-nom').value = p.nom;
+            document.getElementById('reg-parcelle-cepage').value = p.cepage || '';
+            document.getElementById('reg-parcelle-surface').value = p.surface;
+            document.getElementById('btn-parcelle-submit').innerHTML = '<i data-lucide="check" class="icon-sm"></i>Enregistrer les modifications';
+            document.getElementById('annuler-edition-parcelle').style.display = 'block';
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            document.getElementById('reg-parcelle-nom').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        function annulerEditionParcelle() {
+            parcelleEnEdition = null;
+            document.getElementById('reg-parcelle-nom').value = '';
+            document.getElementById('reg-parcelle-cepage').value = '';
+            document.getElementById('reg-parcelle-surface').value = '';
+            document.getElementById('btn-parcelle-submit').innerHTML = '<i data-lucide="plus" class="icon-sm"></i>Ajouter la parcelle';
+            document.getElementById('annuler-edition-parcelle').style.display = 'none';
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        // Dispatcher appelé par le bouton du formulaire : modifie si une parcelle est en édition,
+        // sinon ajoute une nouvelle parcelle (comportement d'origine, inchangé).
+        async function validerFormulaireParcelle() {
+            if (!parcelleEnEdition) { await ajouterParcelle(); return; }
+
+            const nom = document.getElementById('reg-parcelle-nom').value.trim();
+            const cepage = document.getElementById('reg-parcelle-cepage').value.trim();
+            const surfaceRaw = document.getElementById('reg-parcelle-surface').value;
+
+            if (!nom) { alert('Le nom de la parcelle est obligatoire'); return; }
+            const surfaceVal = parseFloat(surfaceRaw);
+            if (!surfaceRaw || isNaN(surfaceVal) || surfaceVal <= 0) { alert('La surface doit être un nombre supérieur à 0'); return; }
+
+            try {
+                const { error } = await supabaseClient
+                    .from('parcelles')
+                    .update({ nom, cepage: cepage || null, surface: surfaceVal })
+                    .eq('id', parcelleEnEdition);
+                if (error) throw error;
+                annulerEditionParcelle();
+                await chargerParcelles();
+                afficherReglages();
+            } catch (err) {
+                alert('Erreur: ' + messageErreur(err));
             }
         }
 
@@ -3325,7 +3379,11 @@
                             <strong style="font-size: 13px;">${p.nom}</strong>
                             <div style="font-size: 11px; color: var(--text-light); margin-top: 2px;">${p.surface} ha${p.cepage ? ' · ' + p.cepage : ''}</div>
                         </div>
-                        ${monRole === 'admin' ? `<button class="btn-icon-delete" title="Supprimer" onclick="supprimerParcelle('${p.id}', '${p.nom.replace(/'/g, "\\'")}')"><i data-lucide="x" class="icon-sm"></i></button>` : ''}
+                        ${monRole === 'admin' ? `
+                        <div style="display: flex; gap: 6px; flex-shrink: 0;">
+                            <button class="btn-icon-delete" title="Modifier" style="color: var(--secondary);" onclick="modifierParcelleExistante('${p.id}')"><i data-lucide="pencil" class="icon-sm"></i></button>
+                            <button class="btn-icon-delete" title="Supprimer" onclick="supprimerParcelle('${p.id}', '${p.nom.replace(/'/g, "\\'")}')"><i data-lucide="x" class="icon-sm"></i></button>
+                        </div>` : ''}
                     </div>
                 `).join('');
             }
