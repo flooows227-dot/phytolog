@@ -3069,6 +3069,10 @@
         async function validerRapport() {
             if (!workflowEnCours || !currentExploitation || !currentUser) return;
             const w = workflowEnCours;
+            if (w.dateISO && saisonsCloturees.has(new Date(w.dateISO).getFullYear())) {
+                alert(`La saison ${new Date(w.dateISO).getFullYear()} est clôturée : impossible d'y enregistrer un nouveau traitement. Rouvre-la d'abord si besoin (onglet Historique → Bilan annuel).`);
+                return;
+            }
             const bouton = document.getElementById('btn-valider');
             bouton.disabled = true;
             bouton.textContent = 'Enregistrement...';
@@ -3625,6 +3629,11 @@
         let editEnCours = null; // { id, parcelles: Set<nom>, doses: {nom: {valeur, unite}} }
 
         async function supprimerTraitement(id) {
+            const t = traitements.find(x => x.id === id);
+            if (t && saisonsCloturees.has(new Date(t.date).getFullYear())) {
+                alert('Ce traitement appartient à une saison clôturée. Rouvre la saison (onglet Bilan annuel) avant de pouvoir le supprimer.');
+                return;
+            }
             if (!confirm('Supprimer définitivement ce traitement ? Cette action est irréversible.')) return;
             try {
                 const { error } = await supabaseClient.from('traitements').delete().eq('id', id);
@@ -3771,6 +3780,10 @@
             if (!date || !heureDebut || !heureFin) { alert('Date et heures obligatoires'); return; }
             if (editEnCours.parcelles.size === 0) { alert('Sélectionne au moins une parcelle'); return; }
             if (Object.keys(editEnCours.doses).length === 0) { alert('Sélectionne au moins un produit'); return; }
+            if (saisonsCloturees.has(new Date(date).getFullYear())) {
+                alert(`La saison ${new Date(date).getFullYear()} est clôturée : rouvre-la (onglet Bilan annuel) avant de pouvoir y dater un traitement.`);
+                return;
+            }
 
             let duree = (parseInt(heureFin.split(':')[0]) * 60 + parseInt(heureFin.split(':')[1]))
                       - (parseInt(heureDebut.split(':')[0]) * 60 + parseInt(heureDebut.split(':')[1]));
