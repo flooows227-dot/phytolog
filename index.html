@@ -482,6 +482,31 @@
             box-shadow: 0 12px 32px rgba(38, 48, 38, 0.12), 0 2px 8px rgba(38, 48, 38, 0.06);
         }
 
+        .auth-tabs {
+            display: flex;
+            background: var(--bg);
+            border-radius: 999px;
+            padding: 4px;
+            gap: 2px;
+            margin-bottom: 22px;
+        }
+        .auth-tab {
+            flex: 1;
+            text-align: center;
+            padding: 10px 10px;
+            border-radius: 999px;
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            font-family: inherit;
+            font-size: 13.5px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s ease, color 0.15s ease;
+        }
+        .auth-tab.active { background: var(--primary); color: var(--white); }
+        .auth-tab:not(.active):hover { background: var(--primary-wash); color: var(--primary); }
+
         .auth-title { font-size: 21px; font-weight: 700; margin-bottom: 6px; color: var(--primary); }
         .auth-subtitle { font-size: 13.5px; color: var(--text-muted); margin-bottom: 24px; }
 
@@ -545,9 +570,9 @@
             <img src="./logo-complet.png" class="logo-mark-lg" alt="PhytoLog — Suivi des traitements phytosanitaires">
         </div>
         <div class="auth-card auth-bulle">
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 20px;">
-                <button type="button" class="nav-btn active" id="onglet-connexion" onclick="afficherOngletSetup('connexion')">Se connecter</button>
-                <button type="button" class="nav-btn" id="onglet-creation" onclick="afficherOngletSetup('creation')">Créer mon compte</button>
+            <div class="auth-tabs">
+                <button type="button" class="auth-tab active" id="onglet-connexion" onclick="afficherOngletSetup('connexion')">Se connecter</button>
+                <button type="button" class="auth-tab" id="onglet-creation" onclick="afficherOngletSetup('creation')">Créer mon compte</button>
             </div>
 
             <!-- ---- CRÉATION DE COMPTE ---- -->
