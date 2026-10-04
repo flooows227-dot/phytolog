@@ -454,8 +454,14 @@
             overflow-y: auto;
             padding: 20px;
             position: relative;
-            background: var(--bg);
+            background:
+                radial-gradient(circle at 20% 15%, var(--primary-wash) 0%, transparent 45%),
+                radial-gradient(circle at 85% 85%, var(--bordeaux-wash) 0%, transparent 40%),
+                var(--bg);
         }
+
+        .auth-page-entete { margin: auto auto 22px; text-align: center; }
+        .auth-page-entete .logo-mark-lg { margin-bottom: 0; }
 
         .auth-card {
             background: var(--white);
@@ -468,7 +474,12 @@
             box-shadow: var(--shadow-md);
             position: relative;
             z-index: 1;
-            margin: auto 0;
+        }
+
+        /* La "bulle" de connexion : davantage détachée du fond, comme une fenêtre flottante */
+        .auth-bulle {
+            margin: 0 auto auto;
+            box-shadow: 0 12px 32px rgba(38, 48, 38, 0.12), 0 2px 8px rgba(38, 48, 38, 0.06);
         }
 
         .auth-title { font-size: 21px; font-weight: 700; margin-bottom: 6px; color: var(--primary); }
@@ -530,17 +541,17 @@
 
     <!-- PAGE CRÉATION EXPLOITATION (premiers utilisateurs) -->
     <div id="setup-page" class="auth-page" style="display: none;">
-        <div class="auth-card">
+        <div class="auth-page-entete">
             <img src="./logo-complet.png" class="logo-mark-lg" alt="PhytoLog — Suivi des traitements phytosanitaires">
-            <h1 class="auth-title">Bienvenue sur PhytoLog</h1>
-
+        </div>
+        <div class="auth-card auth-bulle">
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 20px;">
-                <button type="button" class="nav-btn active" id="onglet-creation" onclick="afficherOngletSetup('creation')">Créer mon compte</button>
-                <button type="button" class="nav-btn" id="onglet-connexion" onclick="afficherOngletSetup('connexion')">Se connecter</button>
+                <button type="button" class="nav-btn active" id="onglet-connexion" onclick="afficherOngletSetup('connexion')">Se connecter</button>
+                <button type="button" class="nav-btn" id="onglet-creation" onclick="afficherOngletSetup('creation')">Créer mon compte</button>
             </div>
 
             <!-- ---- CRÉATION DE COMPTE ---- -->
-            <div id="panneau-creation">
+            <div id="panneau-creation" style="display: none;">
                 <p class="auth-subtitle">Un compte protégé par mot de passe, puis ton exploitation</p>
 
                 <div class="form-group" style="text-align: left;">
@@ -604,7 +615,7 @@
             </div>
 
             <!-- ---- CONNEXION ---- -->
-            <div id="panneau-connexion" style="display: none;">
+            <div id="panneau-connexion">
                 <p class="auth-subtitle">Déjà un compte, ou invité par un admin ?</p>
                 <div class="form-group" style="text-align: left;">
                     <label class="form-label">Email</label>
@@ -700,6 +711,11 @@
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                             <h3>Étape 1 — Préparation de la bouillie</h3>
                             <span class="step-badge">Étape 1/3</span>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Nom du traitement (optionnel)</label>
+                            <input type="text" id="workflow-libelle" class="form-input" placeholder="Ex: Escoriose, Mise en réserve..." oninput="workflowEnCours.libelle = this.value; sauvegarderBrouillon();">
                         </div>
 
                         <div class="form-group">
@@ -837,6 +853,10 @@
             <section id="modif-traitement" class="section">
                 <div class="form-card">
                     <h3 style="margin-bottom: 12px;"><i data-lucide="pencil" class="icon-sm"></i> Modifier le traitement</h3>
+                    <div class="form-group">
+                        <label class="form-label">Nom du traitement (optionnel)</label>
+                        <input type="text" id="modif-libelle" class="form-input" placeholder="Ex: Escoriose, Mise en réserve...">
+                    </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
                         <div class="form-group">
                             <label class="form-label">Date</label>
@@ -1119,6 +1139,25 @@
         let collaborateurs = [];      // liste des invitations/collaborateurs (admin uniquement)
         let produitsFavorisIds = new Set(); // id des produits marqués favoris pour cette exploitation
         let monPrenom = null; // prénom de l'utilisateur connecté, pour le message d'accueil
+        let nomsUtilisateurs = {}; // id -> "Prénom Nom" (ou email à défaut), pour afficher qui a fait un traitement
+
+        // Précharge le nom de chaque personne ayant créé un traitement déjà chargé (admin ET
+        // collaborateurs). Ne redemande jamais un id déjà en cache.
+        async function chargerNomsUtilisateurs() {
+            const idsManquants = [...new Set(traitements.map(t => t.created_by).filter(Boolean))]
+                .filter(id => !(id in nomsUtilisateurs));
+            if (idsManquants.length === 0) return;
+            try {
+                const { data, error } = await supabaseClient.from('profiles').select('id, prenom, nom, email').in('id', idsManquants);
+                if (error) throw error;
+                (data || []).forEach(p => {
+                    nomsUtilisateurs[p.id] = [p.prenom, p.nom].filter(Boolean).join(' ') || p.email || null;
+                });
+            } catch (err) {
+                console.warn('Erreur chargement noms équipe:', err);
+            }
+            idsManquants.forEach(id => { if (!(id in nomsUtilisateurs)) nomsUtilisateurs[id] = null; });
+        }
         let logoDataURL = null; // logo PhytoLog préchargé en base64, pour l'insérer dans les PDF
 
         async function precharcherLogoPDF() {
@@ -2291,6 +2330,7 @@
                 console.error('Erreur traitements:', err);
                 traitements = [];
             }
+            await chargerNomsUtilisateurs(); // toujours à jour, quel que soit l'appelant
         }
 
         // ===== COLLABORATEURS (admin uniquement) =====
@@ -2446,6 +2486,7 @@
                 exploitation_id: currentExploitation.id,
                 sauvegarde_le: new Date().toISOString(),
                 etape: w.etape,
+                libelle: w.libelle || '',
                 volume: w.volume,
                 surface: w.surface,
                 doses: w.doses,
@@ -2466,6 +2507,7 @@
         function deserialiserWorkflow(b) {
             return {
                 etape: b.etape,
+                libelle: b.libelle || '',
                 volume: b.volume,
                 surface: b.surface,
                 produits: {},
@@ -2547,6 +2589,7 @@
             workflowEnCours = deserialiserWorkflow(b);
             document.getElementById('workflow-volume').value = workflowEnCours.volume;
             document.getElementById('workflow-surface').value = workflowEnCours.surface;
+            document.getElementById('workflow-libelle').value = workflowEnCours.libelle || '';
             switchView('workflow');
             afficherEtape1();
             if (workflowEnCours.etape >= 2) afficherEtape2();
@@ -2602,6 +2645,7 @@
             }
             workflowEnCours = {
                 etape: 1,
+                libelle: '',
                 volume: parseInt(document.getElementById('workflow-volume').value, 10) || 1000,
                 surface: parseFloat(document.getElementById('workflow-surface').value) || 8,
                 produits: {},
@@ -2610,6 +2654,7 @@
                 debutTime: new Date(),
                 heureDebut: heureActuelle()
             };
+            document.getElementById('workflow-libelle').value = '';
             switchView('workflow');
             afficherEtape1();
             sauvegarderBrouillon();
@@ -3011,6 +3056,11 @@
 
             document.getElementById('workflow-recap').innerHTML = `
                 <div class="form-card" style="margin-bottom: 12px; padding: 4px 16px;">
+                    ${w.libelle ? `
+                    <div style="display: flex; justify-content: space-between; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--border);">
+                        <span style="font-size: 12.5px; color: var(--text-light); display: flex; align-items: center; gap: 6px;"><i data-lucide="tag" class="icon-sm"></i>Nom</span>
+                        <strong style="font-size: 13px; text-align: right; color: var(--primary);">${echapperHtml(w.libelle)}</strong>
+                    </div>` : ''}
                     <div style="display: flex; justify-content: space-between; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--border);">
                         <span style="font-size: 12.5px; color: var(--text-light); display: flex; align-items: center; gap: 6px;"><i data-lucide="calendar" class="icon-sm"></i>Date</span>
                         <strong style="font-size: 13px; text-align: right;">${w.debutTime.toLocaleDateString('fr-FR')}</strong>
@@ -3018,6 +3068,10 @@
                     <div style="display: flex; justify-content: space-between; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--border);">
                         <span style="font-size: 12.5px; color: var(--text-light); display: flex; align-items: center; gap: 6px;"><i data-lucide="clock" class="icon-sm"></i>Durée</span>
                         <strong style="font-size: 13px; text-align: right;">${w.heureDebut} → ${w.heureFin} (${formaterDuree(w.duree)})</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--border);">
+                        <span style="font-size: 12.5px; color: var(--text-light); display: flex; align-items: center; gap: 6px;"><i data-lucide="user" class="icon-sm"></i>Réalisé par</span>
+                        <strong style="font-size: 13px; text-align: right;">${echapperHtml(nomsUtilisateurs[currentUser.id] || monPrenom || 'Toi')}</strong>
                     </div>
                     <div style="display: flex; justify-content: space-between; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--border);">
                         <span style="font-size: 12.5px; color: var(--text-light); display: flex; align-items: center; gap: 6px;"><i data-lucide="map-pin" class="icon-sm"></i>Parcelles (${w.totalSurf.toFixed(2)} ha)</span>
@@ -3215,6 +3269,7 @@
                     volume_prepare: w.volume,
                     meteo: w.meteo || null,
                     notes: (w.note || '').trim() || null,
+                    libelle: (w.libelle || '').trim() || null,
                     created_by: currentUser.id,
                     debut_iso: w.debutTime.toISOString(),
                     fin_iso: w.finTime.toISOString()
@@ -3695,6 +3750,16 @@
             }
         }
 
+        // Titre affiché pour un traitement dans l'historique : son nom s'il en a un
+        // (avec la date en plus petit à côté), sinon la date seule comme avant.
+        function titreTraitement(t) {
+            const dateTxt = new Date(t.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+            if (t.libelle) {
+                return `${echapperHtml(t.libelle)} <span style="font-weight: 400; font-size: 11px; color: var(--text-light);">— ${dateTxt}</span>`;
+            }
+            return dateTxt;
+        }
+
         function afficherHisto() {
             const list = document.getElementById('histo-list');
             const enAttente = lireFileAttenteExploitation();
@@ -3705,7 +3770,7 @@
                 html += enAttente.map((t, i) => `
                     <div class="item-card" style="border-left-color: var(--warning); background: var(--beige);">
                         <div class="item-row" style="margin-bottom: 6px;">
-                            <strong style="font-size: 14px; color: var(--primary); display:flex; align-items:center; gap:6px;"><i data-lucide="clipboard-list" class="icon-sm"></i>${new Date(t.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</strong>
+                            <strong style="font-size: 14px; color: var(--primary); display:flex; align-items:center; gap:6px;"><i data-lucide="clipboard-list" class="icon-sm"></i>${titreTraitement(t)}</strong>
                             <button class="btn-icon-delete" title="Télécharger le PDF" style="color: var(--primary);" onclick="genererPDFTraitementEnAttente(${i})"><i data-lucide="download" class="icon-sm"></i></button>
                         </div>
                         <div style="font-size: 12px; color: var(--text-light); display:flex; align-items:center; gap:5px;">
@@ -3727,7 +3792,7 @@
                 return `
                 <div class="item-card">
                     <div class="item-row" style="margin-bottom: 6px;">
-                        <strong style="font-size: 14px; color: var(--primary); display:flex; align-items:center; gap:6px;"><i data-lucide="clipboard-list" class="icon-sm"></i>${new Date(t.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</strong>
+                        <strong style="font-size: 14px; color: var(--primary); display:flex; align-items:center; gap:6px;"><i data-lucide="clipboard-list" class="icon-sm"></i>${titreTraitement(t)}</strong>
                         <div style="display: flex; gap: 6px; flex-shrink: 0;">
                             ${peutModifier ? `<button class="btn-icon-delete" title="Modifier" style="color: var(--secondary);" onclick="ouvrirModificationTraitement('${t.id}')"><i data-lucide="pencil" class="icon-sm"></i></button>` : ''}
                             <button class="btn-icon-delete" title="Télécharger le PDF" style="color: var(--primary);" onclick="genererPDFTraitement(traitements[${i}])"><i data-lucide="download" class="icon-sm"></i></button>
@@ -3741,6 +3806,7 @@
                         <span style="opacity: 0.5;">·</span>
                         <strong style="color: var(--text);">${t.surface_traitee.toFixed(2)} ha</strong>
                     </div>
+                    ${t.created_by && nomsUtilisateurs[t.created_by] ? `<div style="font-size: 11px; color: var(--text-light); margin-top: 4px; display:flex; align-items:center; gap:5px;"><i data-lucide="user" class="icon-sm"></i>Réalisé par ${echapperHtml(nomsUtilisateurs[t.created_by])}</div>` : ''}
                     ${t.meteo ? `<div style="font-size: 11px; color: var(--text-light); margin-top: 4px; display:flex; align-items:center; gap:5px;"><i data-lucide="wind" class="icon-sm"></i>${t.meteo.vent_moyen} km/h${t.meteo.vent_direction ? ' ' + t.meteo.vent_direction : ''} (rafales ${t.meteo.rafale_max}) · <i data-lucide="droplets" class="icon-sm"></i>${t.meteo.pluie_totale} mm</div>` : ''}
                     ${t.notes ? `<div style="font-size: 12px; margin-top: 4px; font-style: italic; display:flex; gap:5px;"><i data-lucide="pencil" class="icon-sm" style="flex-shrink:0; margin-top:2px;"></i>${echapperHtml(t.notes)}</div>` : ''}
                 </div>
@@ -3781,6 +3847,7 @@
             Object.entries(t.produits || {}).forEach(([nom, entree]) => {
                 editEnCours.doses[nom] = { valeur: doseValeur(entree), unite: doseUnite(entree) };
             });
+            document.getElementById('modif-libelle').value = t.libelle || '';
             document.getElementById('modif-date').value = t.date;
             document.getElementById('modif-heure-debut').value = t.heure_debut;
             document.getElementById('modif-heure-fin').value = t.heure_fin;
@@ -3897,6 +3964,7 @@
 
         async function enregistrerModificationTraitement() {
             if (!editEnCours) return;
+            const libelle = document.getElementById('modif-libelle').value.trim();
             const date = document.getElementById('modif-date').value;
             const heureDebut = document.getElementById('modif-heure-debut').value;
             const heureFin = document.getElementById('modif-heure-fin').value;
@@ -3924,7 +3992,7 @@
                     .update({
                         date, heure_debut: heureDebut, heure_fin: heureFin, duree_minutes: duree,
                         parcelles: parcellesJSON, produits: editEnCours.doses,
-                        surface_traitee: surfaceTotale, notes: note || null
+                        surface_traitee: surfaceTotale, notes: note || null, libelle: libelle || null
                     })
                     .eq('id', editEnCours.id);
                 if (error) throw error;
@@ -4113,17 +4181,24 @@
                     doc.text(lignesExploit[i], xBox + 4, yBox);
                 }
 
-                y += 20;
+                y += Math.max(20, hauteurBox + 4);
                 doc.setDrawColor(220, 220, 220);
                 doc.line(marge, y, marge + largeurUtile, y);
                 y += 9;
                 ligne('Compte rendu de traitement phytosanitaire', 13, true, [38, 48, 38]);
+                if (t.libelle) {
+                    y += 6;
+                    ligne(t.libelle, 11, true, [111, 143, 61]);
+                }
                 y += 8;
 
                 // ===== DATE ET HORAIRES =====
                 sousTitre('Date et horaires');
                 paragraphe(`Date : ${new Date(t.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}`, 11);
                 paragraphe(`De ${t.heure_debut} à ${t.heure_fin}  (durée : ${formaterDuree(t.duree_minutes)})`, 11);
+                if (t.created_by && typeof nomsUtilisateurs !== 'undefined' && nomsUtilisateurs[t.created_by]) {
+                    paragraphe(`R\u00e9alis\u00e9 par ${nomsUtilisateurs[t.created_by]}`, 10, false, [91, 107, 85]);
+                }
 
                 // ===== PARCELLES =====
                 sousTitre(`Parcelles traitées (${formaterNombre(Number(t.surface_traitee), 2)} ha au total)`);
