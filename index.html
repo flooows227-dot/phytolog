@@ -3945,16 +3945,27 @@
             });
         }
 
+        // Produits d'un traitement qui ne sont (plus) dans le catalogue (ancien produit saisi à la main,
+        // supprimé depuis…). Ils doivent rester visibles et décochables, sinon on ne peut pas les
+        // remplacer par le bon produit.
+        function produitsOrphelins(doses, catalogue) {
+            const connus = new Set(catalogue.map(p => p.nom));
+            return Object.keys(doses)
+                .filter(nom => !connus.has(nom))
+                .map(nom => ({ nom, dose: doseValeur(doses[nom]), unite: doseUnite(doses[nom]), categorie: '', orphelin: true }));
+        }
+
         function afficherModifProduits() {
             const cont = document.getElementById('modif-produits');
             const recherche = document.getElementById('modif-produits-recherche');
             if (recherche) recherche.value = '';
             cont.innerHTML = '';
-            if (produits.length === 0) {
+            const lignesProduits = [...produitsOrphelins(editEnCours.doses, produits), ...produits];
+            if (lignesProduits.length === 0) {
                 cont.innerHTML = '<p class="empty-note">Aucun produit configuré.</p>';
                 return;
             }
-            produits.forEach(prod => {
+            lignesProduits.forEach(prod => {
                 const dejaChoisi = editEnCours.doses[prod.nom];
                 const label = document.createElement('label');
                 label.className = 'checkbox-item';
@@ -3971,6 +3982,12 @@
                 nom.style.fontSize = '13px';
                 nom.textContent = prod.nom;
                 div.appendChild(nom);
+                if (prod.orphelin) {
+                    const avertissement = document.createElement('div');
+                    avertissement.style.cssText = 'font-size: 11px; color: var(--warning); margin-top: 2px;';
+                    avertissement.textContent = 'Absent du catalogue : décoche-le pour le remplacer par le bon produit.';
+                    div.appendChild(avertissement);
+                }
 
                 const doseWrap = document.createElement('div');
                 doseWrap.style.cssText = 'display: flex; align-items: center; gap: 6px; margin-top: 4px;';
