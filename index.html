@@ -838,11 +838,23 @@
                 <div style="display: flex; gap: 6px; margin-bottom: 12px;">
                     <button type="button" class="nav-btn active" id="onglet-histo-liste" onclick="afficherOngletHisto('liste')"><i data-lucide="list" class="icon-sm"></i>Liste</button>
                     <button type="button" class="nav-btn" id="onglet-histo-bilan" onclick="afficherOngletHisto('bilan')"><i data-lucide="bar-chart-3" class="icon-sm"></i>Bilan annuel</button>
+                    <button type="button" class="nav-btn" id="onglet-histo-journal" data-admin-seulement onclick="afficherOngletHisto('journal')"><i data-lucide="shield-check" class="icon-sm"></i>Journal</button>
                 </div>
 
                 <div id="histo-panneau-liste">
                     <div class="form-card">
-                        <h3 style="margin-bottom: 16px;">Historique des traitements</h3>
+                        <h3 style="margin-bottom: 12px;">Historique des traitements</h3>
+                        <input type="text" id="histo-recherche" class="form-input" placeholder="Rechercher : parcelle, produit, nom, note, personne, mois…" oninput="majFiltresHisto()">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px;">
+                            <select id="histo-filtre-annee" class="form-select" aria-label="Saison" onchange="majFiltresHisto()"></select>
+                            <select id="histo-filtre-personne" class="form-select" aria-label="Personne" onchange="majFiltresHisto()"></select>
+                            <select id="histo-filtre-parcelle" class="form-select" aria-label="Parcelle" onchange="majFiltresHisto()"></select>
+                            <select id="histo-filtre-produit" class="form-select" aria-label="Produit" onchange="majFiltresHisto()"></select>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin: 8px 0 12px; min-height: 22px;">
+                            <span id="histo-compteur" style="font-size: 12px; color: var(--text-light);"></span>
+                            <button type="button" class="btn-tertiary" id="histo-effacer-filtres" style="display: none; width: auto; padding: 2px 0;" onclick="effacerFiltresHisto()">Effacer les filtres</button>
+                        </div>
                         <div id="histo-list"></div>
                     </div>
                 </div>
@@ -871,6 +883,14 @@
                         <button class="btn-secondary" id="btn-rouvrir-saison" style="display: none; margin-bottom: 8px;" onclick="demanderReouvertureSaison()"><i data-lucide="lock-open" class="icon-sm"></i>Rouvrir cette saison</button>
                     </div>
                     <button class="btn-tertiary" style="margin: 0 auto; display: flex;" onclick="genererPDFBilanAnnuel()"><i data-lucide="download" class="icon-sm"></i>Télécharger le bilan en PDF</button>
+                </div>
+
+                <div id="histo-panneau-journal" style="display: none;">
+                    <div class="form-card">
+                        <h3 style="margin-bottom: 6px;"><i data-lucide="shield-check" class="icon-sm"></i>Journal des modifications</h3>
+                        <p style="font-size: 12px; color: var(--text-light); margin-bottom: 12px;">Toute modification ou suppression d'un traitement est inscrite ici par le serveur : qui, quand, et ce qui a changé. Personne ne peut modifier ni effacer cette liste.</p>
+                        <div id="journal-liste"></div>
+                    </div>
                 </div>
             </section>
 
@@ -1165,11 +1185,14 @@
         let produitsFavorisIds = new Set(); // id des produits marqués favoris pour cette exploitation
         let monPrenom = null; // prénom de l'utilisateur connecté, pour le message d'accueil
         let nomsUtilisateurs = {}; // id -> "Prénom Nom" (ou email à défaut), pour afficher qui a fait un traitement
+        let filtresHisto = { texte: '', annee: '', parcelle: '', produit: '', personne: '' }; // recherche / filtres de l'historique
+        let journalModifs = [];          // journal des modifications (admin seulement), le plus récent d'abord
+        let journalDisponible = true;    // faux si la table du journal n'existe pas encore
 
         // Précharge le nom de chaque personne ayant créé un traitement déjà chargé (admin ET
         // collaborateurs). Ne redemande jamais un id déjà en cache.
         async function chargerNomsUtilisateurs() {
-            const idsManquants = [...new Set(traitements.map(t => t.created_by).filter(Boolean))]
+            const idsManquants = [...new Set([...traitements.map(t => t.created_by), ...journalModifs.map(e => e.modifie_par)].filter(Boolean))]
                 .filter(id => !(id in nomsUtilisateurs));
             if (idsManquants.length === 0) return;
             try {
@@ -2382,7 +2405,7 @@
                 console.error('Erreur traitements:', err);
                 traitements = [];
             }
-            await chargerNomsUtilisateurs(); // toujours à jour, quel que soit l'appelant
+            await chargerJournalModifs(); // recharge aussi les noms ; toujours à jour, quel que soit l'appelant
         }
 
         // ===== COLLABORATEURS (admin uniquement) =====
@@ -3520,9 +3543,12 @@
         function afficherOngletHisto(nom) {
             document.getElementById('histo-panneau-liste').style.display = nom === 'liste' ? 'block' : 'none';
             document.getElementById('histo-panneau-bilan').style.display = nom === 'bilan' ? 'block' : 'none';
+            document.getElementById('histo-panneau-journal').style.display = nom === 'journal' ? 'block' : 'none';
             document.getElementById('onglet-histo-liste').classList[nom === 'liste' ? 'add' : 'remove']('active');
             document.getElementById('onglet-histo-bilan').classList[nom === 'bilan' ? 'add' : 'remove']('active');
+            document.getElementById('onglet-histo-journal').classList[nom === 'journal' ? 'add' : 'remove']('active');
             if (nom === 'bilan') { peuplerSelectAnnees(); afficherBilanAnnuel(); }
+            if (nom === 'journal') afficherJournal();
         }
 
         function peuplerSelectAnnees() {
@@ -3809,6 +3835,225 @@
             }
         }
 
+        // ===== RECHERCHE ET FILTRES DE L'HISTORIQUE =====
+        // Tout ce qui peut se chercher dans un traitement, sans accents ni majuscules.
+        function textePourRecherche(t, noms) {
+            const d = new Date(String(t.date) + 'T12:00:00');
+            const dateLongue = isNaN(d.getTime()) ? '' : d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+            return normaliserRecherche([
+                t.libelle, t.notes, t.date, dateLongue, noms[t.created_by],
+                ...(t.parcelles || []).map(p => p.nom), ...Object.keys(t.produits || {})
+            ].filter(Boolean).join(' '));
+        }
+
+        // Tous les mots saisis doivent se retrouver (« cuivre mai » = cuivre ET mai) ; les listes
+        // déroulantes se combinent entre elles par « ET ».
+        function filtrerTraitements(liste, f, noms) {
+            const mots = normaliserRecherche((f.texte || '').trim()).split(/\s+/).filter(Boolean);
+            return liste.filter(t => {
+                if (f.annee && String(anneeDe(t.date)) !== String(f.annee)) return false;
+                if (f.parcelle && !(t.parcelles || []).some(p => p.nom === f.parcelle)) return false;
+                if (f.produit && !Object.prototype.hasOwnProperty.call(t.produits || {}, f.produit)) return false;
+                if (f.personne && t.created_by !== f.personne) return false;
+                if (mots.length) {
+                    const texte = textePourRecherche(t, noms);
+                    if (!mots.every(m => texte.includes(m))) return false;
+                }
+                return true;
+            });
+        }
+
+        function filtresHistoActifs() {
+            return Object.values(filtresHisto).some(v => v && String(v).trim() !== '');
+        }
+
+        function peuplerFiltresHisto() {
+            const unique = (tableau) => [...new Set(tableau)];
+            const alpha = (a, b) => a.localeCompare(b, 'fr');
+            const remplir = (cle, titre, options) => {
+                const select = document.getElementById('histo-filtre-' + cle);
+                if (!select) return;
+                const html = `<option value="">${titre}</option>`
+                    + options.map(o => `<option value="${echapperHtml(o.valeur)}">${echapperHtml(o.libelle)}</option>`).join('');
+                if (select.dataset.signature === html) return;        // rien n'a changé : on ne touche à rien
+                select.innerHTML = html;
+                select.dataset.signature = html;
+                select.value = filtresHisto[cle] || '';
+                if (select.value !== (filtresHisto[cle] || '')) filtresHisto[cle] = '';   // la valeur choisie n'existe plus
+            };
+            remplir('annee', 'Toutes les saisons',
+                unique(traitements.map(t => anneeDe(t.date))).sort((a, b) => b - a).map(a => ({ valeur: String(a), libelle: String(a) })));
+            remplir('parcelle', 'Toutes les parcelles',
+                unique(traitements.flatMap(t => (t.parcelles || []).map(p => p.nom))).sort(alpha).map(n => ({ valeur: n, libelle: n })));
+            remplir('produit', 'Tous les produits',
+                unique(traitements.flatMap(t => Object.keys(t.produits || {}))).sort(alpha).map(n => ({ valeur: n, libelle: n })));
+            remplir('personne', 'Toutes les personnes',
+                unique(traitements.map(t => t.created_by).filter(Boolean))
+                    .map(id => ({ valeur: id, libelle: nomsUtilisateurs[id] || 'Personne inconnue' }))
+                    .sort((a, b) => alpha(a.libelle, b.libelle)));
+        }
+
+        function majFiltresHisto() {
+            const lire = (id) => { const e = document.getElementById(id); return e ? e.value : ''; };
+            filtresHisto = {
+                texte: lire('histo-recherche'), annee: lire('histo-filtre-annee'), parcelle: lire('histo-filtre-parcelle'),
+                produit: lire('histo-filtre-produit'), personne: lire('histo-filtre-personne')
+            };
+            afficherHisto();
+        }
+
+        function effacerFiltresHisto() {
+            ['histo-recherche', 'histo-filtre-annee', 'histo-filtre-parcelle', 'histo-filtre-produit', 'histo-filtre-personne']
+                .forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
+            majFiltresHisto();
+        }
+
+        // ===== DUPLIQUER UN TRAITEMENT =====
+        // Prépare un nouveau traitement avec les mêmes produits, doses, volume et surface.
+        // Les parcelles, la date, la météo et la note ne sont PAS reprises : c'est un nouveau passage.
+        function dupliquerTraitement(id) {
+            const t = traitements.find(x => x.id === id);
+            if (!t) return;
+            if (lireBrouillon()) {
+                alert('Un traitement est déjà en cours. Termine-le ou abandonne-le (depuis l\'accueil) avant d\'en dupliquer un autre.');
+                return;
+            }
+            demarrerTraitement();
+            const w = workflowEnCours;
+            if (!w) return;
+            const catalogue = new Set(produits.map(p => p.nom));
+            const repris = {};
+            const absents = [];
+            Object.entries(t.produits || {}).forEach(([nom, entree]) => {
+                if (catalogue.has(nom)) repris[nom] = { valeur: doseValeur(entree), unite: doseUnite(entree) };
+                else absents.push(nom);
+            });
+            w.doses = repris;
+            if (t.volume_prepare > 0) w.volume = t.volume_prepare;
+            if (t.surface_traitee > 0) w.surface = t.surface_traitee;
+            document.getElementById('workflow-volume').value = w.volume;
+            document.getElementById('workflow-surface').value = w.surface;
+            afficherEtape1();
+            sauvegarderBrouillon();
+            if (absents.length > 0) {
+                alert(`Ces produits ne sont plus au catalogue et n'ont pas été repris : ${absents.join(', ')}.\n\nCoche le bon produit dans la liste.`);
+            }
+        }
+
+        // ===== JOURNAL DES MODIFICATIONS (admin) =====
+        async function chargerJournalModifs() {
+            journalModifs = [];
+            journalDisponible = true;
+            if (monRole === 'admin' && currentExploitation) {
+                try {
+                    const { data, error } = await supabaseClient
+                        .from('traitements_historique')
+                        .select('*')
+                        .eq('exploitation_id', currentExploitation.id)
+                        .order('modifie_le', { ascending: false })
+                        .limit(300);
+                    if (error) throw error;
+                    journalModifs = data || [];
+                } catch (err) {
+                    console.warn('Journal indisponible :', err);
+                    journalDisponible = false;
+                }
+            }
+            await chargerNomsUtilisateurs();
+        }
+
+        function indexJournal() {
+            const index = {};
+            journalModifs.filter(e => e.action === 'modification').forEach(e => {
+                if (!index[e.traitement_id]) index[e.traitement_id] = [];
+                index[e.traitement_id].push(e);
+            });
+            return index;
+        }
+
+        function formaterDateHeure(iso) {
+            const d = new Date(iso);
+            return isNaN(d.getTime()) ? '' : d.toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+        }
+
+        function resumeDerniereModification(entrees) {
+            const derniere = entrees[0];
+            const qui = nomsUtilisateurs[derniere.modifie_par] || 'quelqu\'un';
+            return `Modifié le ${formaterDateHeure(derniere.modifie_le)} par ${qui}` + (entrees.length > 1 ? ` (${entrees.length} modifications)` : '');
+        }
+
+        // Transforme une ligne du journal en phrases lisibles : ce qui a réellement changé.
+        function decrireModification(e) {
+            const a = e.avant || {};
+            const b = e.apres || {};
+            const texte = (v) => (v === null || v === undefined || v === '') ? '—' : String(v);
+            const dose = (entree) => `${formaterNombre(doseValeur(entree), 3)} ${doseUnite(entree)}`;
+            const noms = (parcellesJson) => (parcellesJson || []).map(p => p.nom);
+            const lignes = [];
+
+            if (e.action === 'suppression') {
+                lignes.push('Traitement supprimé');
+                if (noms(a.parcelles).length) lignes.push('Parcelles : ' + noms(a.parcelles).join(', '));
+                const produitsA = Object.entries(a.produits || {}).map(([n, v]) => `${n} (${dose(v)})`);
+                if (produitsA.length) lignes.push('Produits : ' + produitsA.join(', '));
+                return lignes;
+            }
+
+            const comparer = (etiquette, avant, apres) => { if (texte(avant) !== texte(apres)) lignes.push(`${etiquette} : ${texte(avant)} → ${texte(apres)}`); };
+            comparer('Nom', a.libelle, b.libelle);
+            comparer('Date', a.date, b.date);
+            if (a.heure_debut !== b.heure_debut || a.heure_fin !== b.heure_fin) {
+                lignes.push(`Horaires : ${texte(a.heure_debut)}–${texte(a.heure_fin)} → ${texte(b.heure_debut)}–${texte(b.heure_fin)}`);
+            }
+            const pa = noms(a.parcelles), pb = noms(b.parcelles);
+            const ajouteesP = pb.filter(n => !pa.includes(n)), retireesP = pa.filter(n => !pb.includes(n));
+            if (ajouteesP.length) lignes.push('Parcelles ajoutées : ' + ajouteesP.join(', '));
+            if (retireesP.length) lignes.push('Parcelles retirées : ' + retireesP.join(', '));
+            const prA = a.produits || {}, prB = b.produits || {};
+            Object.keys(prB).filter(n => !(n in prA)).forEach(n => lignes.push(`Produit ajouté : ${n} (${dose(prB[n])})`));
+            Object.keys(prA).filter(n => !(n in prB)).forEach(n => lignes.push(`Produit retiré : ${n}`));
+            Object.keys(prB).filter(n => n in prA).forEach(n => {
+                if (dose(prA[n]) !== dose(prB[n])) lignes.push(`Dose de ${n} : ${dose(prA[n])} → ${dose(prB[n])}`);
+            });
+            comparer('Surface traitée', a.surface_traitee == null ? null : formaterNombre(a.surface_traitee, 2) + ' ha',
+                                        b.surface_traitee == null ? null : formaterNombre(b.surface_traitee, 2) + ' ha');
+            comparer('Volume de bouillie', a.volume_prepare, b.volume_prepare);
+            comparer('Note', a.notes, b.notes);
+            if (lignes.length === 0) lignes.push('Mise à jour sans changement visible');
+            return lignes;
+        }
+
+        function afficherJournal() {
+            const cont = document.getElementById('journal-liste');
+            if (!cont) return;
+            if (!journalDisponible) {
+                cont.innerHTML = '<p class="empty-note">Le journal n\'est pas disponible pour le moment.</p>';
+                return;
+            }
+            if (journalModifs.length === 0) {
+                cont.innerHTML = '<p class="empty-note">Aucune modification enregistrée pour l\'instant.</p>';
+                return;
+            }
+            const quand = (d) => { const x = new Date(String(d) + 'T12:00:00'); return isNaN(x.getTime()) ? String(d) : x.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }); };
+            cont.innerHTML = journalModifs.slice(0, 100).map(e => {
+                const suppression = e.action === 'suppression';
+                const avant = e.avant || {};
+                const titre = (avant.libelle ? avant.libelle + ' — ' : '') + quand(avant.date);
+                const qui = nomsUtilisateurs[e.modifie_par] || 'Personne inconnue';
+                return `
+                    <div class="item-card" style="border-left-color: ${suppression ? 'var(--bordeaux)' : 'var(--secondary)'};">
+                        <div class="item-row">
+                            <strong style="font-size: 13px;">${echapperHtml(titre)}</strong>
+                            <span style="font-size: 11px; font-weight: 700; color: ${suppression ? 'var(--bordeaux)' : 'var(--secondary)'};">${suppression ? 'Supprimé' : 'Modifié'}</span>
+                        </div>
+                        <div style="font-size: 11.5px; color: var(--text-light); margin-top: 2px;">${echapperHtml(formaterDateHeure(e.modifie_le))} · par ${echapperHtml(qui)}</div>
+                        <ul style="margin: 6px 0 0 16px; padding: 0; font-size: 12px;">
+                            ${decrireModification(e).map(l => `<li>${echapperHtml(l)}</li>`).join('')}
+                        </ul>
+                    </div>`;
+            }).join('') + (journalModifs.length > 100 ? '<p class="empty-note">Seules les 100 entrées les plus récentes sont affichées.</p>' : '');
+        }
+
         // Titre affiché pour un traitement dans l'historique : son nom s'il en a un
         // (avec la date en plus petit à côté), sinon la date seule comme avant.
         function titreTraitement(t) {
@@ -3822,6 +4067,14 @@
         function afficherHisto() {
             const list = document.getElementById('histo-list');
             const enAttente = lireFileAttenteExploitation();
+            peuplerFiltresHisto();
+            const visibles = filtrerTraitements(traitements, filtresHisto, nomsUtilisateurs);
+            const compteur = document.getElementById('histo-compteur');
+            const boutonEffacer = document.getElementById('histo-effacer-filtres');
+            const pluriel = traitements.length > 1 ? 's' : '';
+            if (compteur) compteur.textContent = traitements.length === 0 ? ''
+                : (filtresHistoActifs() ? `${visibles.length} sur ${traitements.length} traitement${pluriel}` : `${traitements.length} traitement${pluriel}`);
+            if (boutonEffacer) boutonEffacer.style.display = filtresHistoActifs() ? '' : 'none';
 
             let html = '';
             if (enAttente.length > 0) {
@@ -3845,7 +4098,12 @@
                 return;
             }
 
-            html += traitements.map((t, i) => {
+            if (visibles.length === 0 && traitements.length > 0) {
+                html += '<p class="empty-note">Aucun traitement ne correspond à ta recherche.</p>';
+            }
+            const journalParTraitement = indexJournal();
+            html += visibles.map((t) => {
+                const i = traitements.indexOf(t);   // position réelle : le bouton PDF ne doit pas dépendre du filtre
                 const anneeTraitement = anneeDe(t.date);
                 const peutModifier = (monRole === 'admin' || t.created_by === currentUser.id) && !saisonsCloturees.has(anneeTraitement);
                 return `
@@ -3854,6 +4112,7 @@
                         <strong style="font-size: 14px; color: var(--primary); display:flex; align-items:center; gap:6px;"><i data-lucide="clipboard-list" class="icon-sm"></i>${titreTraitement(t)}</strong>
                         <div style="display: flex; gap: 6px; flex-shrink: 0;">
                             ${peutModifier ? `<button class="btn-icon-delete" title="Modifier" style="color: var(--secondary);" onclick="ouvrirModificationTraitement('${t.id}')"><i data-lucide="pencil" class="icon-sm"></i></button>` : ''}
+                            <button class="btn-icon-delete" title="Dupliquer pour un nouveau traitement" style="color: var(--secondary);" onclick="dupliquerTraitement('${t.id}')"><i data-lucide="copy" class="icon-sm"></i></button>
                             <button class="btn-icon-delete" title="Télécharger le PDF" style="color: var(--primary);" onclick="genererPDFTraitement(traitements[${i}])"><i data-lucide="download" class="icon-sm"></i></button>
                             ${peutModifier ? `<button class="btn-icon-delete" title="Supprimer" onclick="supprimerTraitement('${t.id}')"><i data-lucide="trash-2" class="icon-sm"></i></button>` : ''}
                         </div>
@@ -3861,11 +4120,12 @@
                     <div style="font-size: 12px; color: var(--text-light); display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin-top: 3px;">
                         <i data-lucide="clock" class="icon-sm"></i>${t.heure_debut}–${t.heure_fin} <span style="opacity: 0.6;">(${formaterDuree(t.duree_minutes)})</span>
                         <span style="opacity: 0.5;">·</span>
-                        <strong style="color: var(--text);">${t.parcelles.length}</strong> parcelle${t.parcelles.length > 1 ? 's' : ''}
+                        <strong style="color: var(--text);">${(t.parcelles || []).length}</strong> parcelle${(t.parcelles || []).length > 1 ? 's' : ''}
                         <span style="opacity: 0.5;">·</span>
-                        <strong style="color: var(--text);">${t.surface_traitee.toFixed(2)} ha</strong>
+                        <strong style="color: var(--text);">${Number(t.surface_traitee || 0).toFixed(2)} ha</strong>
                     </div>
                     ${t.created_by && nomsUtilisateurs[t.created_by] ? `<div style="font-size: 11px; color: var(--text-light); margin-top: 4px; display:flex; align-items:center; gap:5px;"><i data-lucide="user" class="icon-sm"></i>Réalisé par ${echapperHtml(nomsUtilisateurs[t.created_by])}</div>` : ''}
+                    ${monRole === 'admin' && journalParTraitement[t.id] ? `<div style="font-size: 11px; color: var(--secondary); margin-top: 4px; display:flex; align-items:center; gap:5px;"><i data-lucide="history" class="icon-sm"></i>${echapperHtml(resumeDerniereModification(journalParTraitement[t.id]))}</div>` : ''}
                     ${t.meteo ? `<div style="font-size: 11px; color: var(--text-light); margin-top: 4px; display:flex; align-items:center; gap:5px;"><i data-lucide="wind" class="icon-sm"></i>${t.meteo.vent_moyen} km/h${t.meteo.vent_direction ? ' ' + t.meteo.vent_direction : ''} (rafales ${t.meteo.rafale_max}) · <i data-lucide="droplets" class="icon-sm"></i>${t.meteo.pluie_totale} mm</div>` : ''}
                     ${t.notes ? `<div style="font-size: 12px; margin-top: 4px; font-style: italic; display:flex; gap:5px;"><i data-lucide="pencil" class="icon-sm" style="flex-shrink:0; margin-top:2px;"></i>${echapperHtml(t.notes)}</div>` : ''}
                 </div>
