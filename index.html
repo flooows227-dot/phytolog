@@ -1577,7 +1577,31 @@
             }
         }
 
+        // Chaque compte avec e-mail doit avoir une ligne dans "profiles" : la table des collaborateurs
+        // y est reliée, sans profil un invité ne pourrait pas rejoindre l'exploitation.
+        // (Ne remplace jamais un profil existant ; les comptes anonymes n'en ont pas.)
+        async function garantirProfil() {
+            if (!currentUser || !currentUser.email) return;
+            try {
+                await supabaseClient.from('profiles').upsert({ id: currentUser.id }, { onConflict: 'id', ignoreDuplicates: true });
+            } catch (err) {
+                console.warn('Profil non créé :', err);
+            }
+        }
+
+        // Prénom et nom (visibles de l'équipe) vont dans "profiles" ; la date de naissance, elle,
+        // va dans "profils_prives", lisible uniquement par la personne elle-même.
+        async function sauvegarderProfil(prenom, nom, naissance) {
+            const r1 = await supabaseClient.from('profiles')
+                .upsert({ id: currentUser.id, prenom: prenom || null, nom: nom || null }, { onConflict: 'id' });
+            if (r1.error) throw r1.error;
+            const r2 = await supabaseClient.from('profils_prives')
+                .upsert({ id: currentUser.id, date_naissance: naissance || null }, { onConflict: 'id' });
+            if (r2.error) throw r2.error;
+        }
+
         async function verifierExploitationExistante() {
+            await garantirProfil();
             await reclamerInvitationEnAttente();
 
             const { data, error } = await supabaseClient
@@ -1709,7 +1733,7 @@
 
                 currentUser = data.user;
 
-                await supabaseClient.from('profiles').insert([{ id: currentUser.id, prenom: prenom || null, nom: nomPerso || null, date_naissance: naissance }]);
+                try { await sauvegarderProfil(prenom, nomPerso, naissance); } catch (err) { console.warn('Profil non enregistré à l\'inscription :', err); }
 
                 // Cet email avait-il déjà une invitation en attente (posée par un admin) ?
                 // Si oui, on rejoint SON exploitation plutôt que d'en créer une nouvelle —
@@ -1838,6 +1862,8 @@
             try {
                 const { data } = await supabaseClient.from('profiles').select('*').eq('id', currentUser.id).single();
                 monPrenom = (data && data.prenom) || null;
+                const prive = await supabaseClient.from('profils_prives').select('date_naissance').eq('id', currentUser.id).maybeSingle();
+                const naissanceStockee = (prive && prive.data && prive.data.date_naissance) || '';
                 const champPrenom = document.getElementById('profil-prenom');
                 const champNom = document.getElementById('profil-nom');
                 const champNaissance = document.getElementById('profil-naissance');
@@ -1845,7 +1871,7 @@
                 if (data && champPrenom && ![champPrenom, champNom, champNaissance].includes(document.activeElement)) {
                     champPrenom.value = data.prenom || '';
                     champNom.value = data.nom || '';
-                    champNaissance.value = data.date_naissance || '';
+                    champNaissance.value = naissanceStockee;
                 }
             } catch (err) {
                 monPrenom = null;
@@ -1861,10 +1887,7 @@
             const naissance = document.getElementById('profil-naissance').value || null;
             const statut = document.getElementById('profil-statut');
             try {
-                const { error } = await supabaseClient
-                    .from('profiles')
-                    .upsert({ id: currentUser.id, prenom: prenom || null, nom: nom || null, date_naissance: naissance }, { onConflict: 'id' });
-                if (error) throw error;
+                await sauvegarderProfil(prenom, nom, naissance);
                 statut.innerHTML = '<span style="color: var(--success);">Profil enregistré</span>';
             } catch (err) {
                 statut.innerHTML = `<span style="color: #a13b2f;">Erreur : ${echapperHtml(messageErreur(err))}</span>`;
