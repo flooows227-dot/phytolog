@@ -973,6 +973,8 @@
                         <button class="btn-secondary" id="btn-rouvrir-saison" style="display: none; margin-bottom: 8px;" onclick="demanderReouvertureSaison()"><i data-lucide="lock-open" class="icon-sm"></i>Rouvrir cette saison</button>
                     </div>
                     <button class="btn-tertiary" style="margin: 0 auto; display: flex;" onclick="genererPDFBilanAnnuel()"><i data-lucide="download" class="icon-sm"></i>Télécharger le bilan en PDF</button>
+                    <button class="btn-tertiary" style="margin: 4px auto 0; display: flex;" onclick="telechargerRegistreCSV()"><i data-lucide="table" class="icon-sm"></i>Exporter le registre en tableur (CSV)</button>
+                    <p style="font-size: 11px; color: var(--text-light); text-align: center; margin-top: 4px;">Une ligne par produit appliqué sur chaque parcelle. S'ouvre dans Excel, Numbers ou LibreOffice.</p>
                 </div>
 
                 <div id="histo-panneau-journal" style="display: none;">
@@ -4252,6 +4254,77 @@
             champCalculatrice.value = String(valeur);
             ['input', 'change'].forEach(nom => champCalculatrice.dispatchEvent(new Event(nom, { bubbles: true })));
             fermerCalculatrice();
+        }
+
+        // ===== EXPORT DU REGISTRE EN TABLEUR (CSV, lisible par machine) =====
+        // Une cellule CSV. Pour les textes saisis par un utilisateur, on neutralise tout ce qui
+        // commencerait comme une formule (=, +, -, @) : Excel pourrait sinon l'exécuter à l'ouverture.
+        function celluleCSV(valeur, estTexte) {
+            let v = (valeur === null || valeur === undefined) ? '' : String(valeur);
+            if (estTexte && /^[=+\-@\t\r]/.test(v)) v = "'" + v;
+            return /[;"\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+        }
+
+        // Nombre à la française (virgule), sans zéros inutiles ; vide si absent.
+        function nombreCSV(n, decimales) {
+            if (n === null || n === undefined || n === '' || !isFinite(Number(n))) return '';
+            const f = Math.pow(10, decimales === undefined ? 3 : decimales);
+            return String(Math.round(Number(n) * f) / f).replace('.', ',');
+        }
+
+        // Une ligne par produit appliqué sur chaque parcelle, pour la saison demandée.
+        function construireRegistreCSV(annee) {
+            const exploit = currentExploitation || {};
+            const entetes = ['SIRET', 'Exploitation', 'Conduite', 'Date', 'Heure début', 'Heure fin', 'Traitement', 'Parcelle', 'Cépage',
+                'Latitude', 'Longitude', 'Surface parcelle (ha)', 'Produit', 'N° AMM', 'Dose', 'Unité', 'Quantité sur la parcelle', 'Unité de quantité',
+                'Réalisé par', 'Vent moyen (km/h)', 'Rafales max (km/h)', 'Température min (°C)', 'Température max (°C)', 'Pluie (mm)', 'Note'];
+            const lignes = [entetes.map(h => celluleCSV(h)).join(';')];
+            traitements
+                .filter(t => anneeDe(t.date) === annee)
+                .sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.heure_debut).localeCompare(String(b.heure_debut)))
+                .forEach(t => {
+                    const m = t.meteo || {};
+                    (t.parcelles || []).forEach(pa => {
+                        const parc = parcelles.find(x => x.nom === pa.nom) || {};
+                        Object.entries(t.produits || {}).forEach(([nomProduit, entree]) => {
+                            const prod = produits.find(x => x.nom === nomProduit) || {};
+                            const dose = doseValeur(entree);
+                            const unite = doseUnite(entree);
+                            lignes.push([
+                                celluleCSV(exploit.siret), celluleCSV(exploit.nom, true),
+                                celluleCSV(exploit.agriculture_biologique ? 'Agriculture biologique' : 'Conventionnelle'),
+                                celluleCSV(t.date), celluleCSV(pa.time || t.heure_debut), celluleCSV(t.heure_fin),
+                                celluleCSV(t.libelle, true), celluleCSV(pa.nom, true), celluleCSV(parc.cepage, true),
+                                celluleCSV(nombreCSV(parc.latitude, 6)), celluleCSV(nombreCSV(parc.longitude, 6)), celluleCSV(nombreCSV(parc.surface, 4)),
+                                celluleCSV(nomProduit, true), celluleCSV(prod.numero_amm),
+                                celluleCSV(nombreCSV(dose, 4)), celluleCSV(unite),
+                                celluleCSV(parc.surface ? nombreCSV(dose * parc.surface, 3) : ''), celluleCSV(unite === 'kg/ha' ? 'kg' : 'L'),
+                                celluleCSV(nomsUtilisateurs[t.created_by] || '', true),
+                                celluleCSV(nombreCSV(m.vent_moyen, 1)), celluleCSV(nombreCSV(m.rafale_max, 1)),
+                                celluleCSV(nombreCSV(m.temperature_min !== undefined ? m.temperature_min : m.temperature_moyenne, 1)),
+                                celluleCSV(nombreCSV(m.temperature_max !== undefined ? m.temperature_max : m.temperature_moyenne, 1)),
+                                celluleCSV(nombreCSV(m.pluie_totale, 1)), celluleCSV(t.notes, true)
+                            ].join(';'));
+                        });
+                    });
+                });
+            return lignes.join('\r\n');
+        }
+
+        function telechargerRegistreCSV() {
+            const annee = parseInt(document.getElementById('bilan-annee').value, 10);
+            if (!annee) { alert('Aucune saison à exporter.'); return; }
+            const contenu = construireRegistreCSV(annee);
+            if (contenu.split('\r\n').length < 2) { alert(`Aucun traitement enregistré pour la saison ${annee}.`); return; }
+            const blob = new Blob(['\uFEFF' + contenu], { type: 'text/csv;charset=utf-8' });   // \uFEFF : Excel lit bien les accents
+            const adresse = URL.createObjectURL(blob);
+            const lien = document.createElement('a');
+            lien.href = adresse;
+            lien.download = `phytolog-registre-${annee}.csv`;
+            document.body.appendChild(lien);
+            lien.click();
+            document.body.removeChild(lien);
+            setTimeout(() => URL.revokeObjectURL(adresse), 2000);
         }
 
         // ===== RECHERCHE ET FILTRES DE L'HISTORIQUE =====
