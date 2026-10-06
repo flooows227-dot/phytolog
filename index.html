@@ -548,6 +548,49 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        /* ===== Indicateur de synchronisation ===== */
+        .sync-bandeau { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 5px 12px; font-size: 11.5px; font-weight: 600; flex-shrink: 0; position: relative; z-index: 1; }
+        .sync-ok { background: var(--primary-wash); color: var(--primary); }
+        .sync-hors { background: #EDEBE3; color: var(--text-muted); }
+        .sync-attente, .sync-envoi { background: rgba(168, 115, 58, 0.14); color: var(--warning); }
+        .sync-erreur { background: var(--bordeaux-wash); color: var(--bordeaux); }
+        .sync-attente, .sync-erreur { cursor: pointer; }
+        .sync-envoi svg { animation: sync-tourne 1s linear infinite; }
+        @keyframes sync-tourne { to { transform: rotate(360deg); } }
+
+        /* ===== Confort terrain : cibles tactiles plus grandes sur écran tactile ===== */
+        @media (pointer: coarse) {
+            .btn-submit, .btn-primary, .btn-secondary { min-height: 48px; }
+            .form-input, .form-select { min-height: 48px; }
+            .checkbox-item { min-height: 52px; align-items: center; }
+            .checkbox-item input { width: 22px; height: 22px; margin-top: 0; }
+            .btn-icon-delete { width: 40px; height: 40px; }
+        }
+        /* Mode gants (réglable dans Plus > Mon compte) : tout est nettement plus grand */
+        body.mode-gants .btn-submit, body.mode-gants .btn-primary, body.mode-gants .btn-secondary { min-height: 60px; font-size: 16px; }
+        body.mode-gants .btn-tertiary { min-height: 48px; font-size: 15px; }
+        body.mode-gants .form-input, body.mode-gants .form-select { min-height: 58px; font-size: 18px; }
+        body.mode-gants .checkbox-item { min-height: 68px; padding: 14px 16px; }
+        body.mode-gants .checkbox-item input { width: 30px; height: 30px; }
+        body.mode-gants .checkbox-item strong { font-size: 15px !important; }
+        body.mode-gants .btn-icon-delete { width: 48px; height: 48px; }
+        body.mode-gants .item-row { flex-wrap: wrap; gap: 8px; }   /* les 4 boutons d'action passent sous le titre si l'écran est étroit */
+        body.mode-gants .nav-btn { min-height: 48px; font-size: 14px; }
+        body.mode-gants .bottom-nav-btn { padding: 10px 2px; font-size: 11.5px; }
+
+        /* ===== Calculatrice ===== */
+        .modal-fond { position: fixed; top: 0; right: 0; bottom: 0; left: 0; background: rgba(38, 48, 38, 0.55); z-index: 50; display: flex; align-items: flex-end; justify-content: center; }
+        .calculatrice { background: var(--white); width: 100%; max-width: 360px; border-radius: 18px 18px 0 0; padding: 16px; box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.2); }
+        @media (min-width: 600px) { .modal-fond { align-items: center; padding: 20px; } .calculatrice { border-radius: 18px; } }
+        .calc-entete { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .calc-ecran { background: var(--bg); border: 1.5px solid var(--border); border-radius: var(--radius-sm); padding: 10px 14px; text-align: right; font-size: 30px; font-weight: 700; min-height: 56px; overflow: hidden; }
+        .calc-trace { text-align: right; font-size: 12px; color: var(--text-light); min-height: 18px; margin-bottom: 4px; }
+        .calc-touches { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0; }
+        .calc-touche { min-height: 56px; font-size: 20px; font-weight: 600; border-radius: var(--radius-sm); border: 1.5px solid var(--border); background: var(--white); color: var(--text); cursor: pointer; font-family: inherit; }
+        .calc-touche:active { background: var(--primary-wash-strong); }
+        .calc-op { background: var(--primary-wash); color: var(--primary); }
+        .calc-egal { background: var(--primary); color: var(--white); border-color: var(--primary); grid-row: span 2; }
+        .calc-zero { grid-column: span 2; }
     </style>
     <!-- Analytics respectueux de la vie privée (Umami — aucun cookie, aucune bannière requise) -->
     <script defer src="https://cloud.umami.is/script.js" data-website-id="1bd85f0f-6e0f-4ee7-821d-f8a1d218ef55"></script>
@@ -672,6 +715,40 @@
             </div>
         </div>
 
+        <div id="sync-bandeau" class="sync-bandeau sync-ok" role="status" aria-live="polite" onclick="actionIndicateurSynchro()"></div>
+
+        <div id="calculatrice-fond" class="modal-fond" style="display: none;" onclick="fermerCalculatrice()">
+            <div class="calculatrice" role="dialog" aria-label="Calculatrice" onclick="event.stopPropagation()">
+                <div class="calc-entete">
+                    <strong style="font-size: 14px;">Calculatrice</strong>
+                    <button type="button" class="btn-icon-delete" title="Fermer" style="color: var(--text-muted);" onclick="fermerCalculatrice()"><i data-lucide="x" class="icon-sm"></i></button>
+                </div>
+                <div id="calc-trace" class="calc-trace"></div>
+                <div id="calc-ecran" class="calc-ecran">0</div>
+                <div class="calc-touches">
+                    <button type="button" class="calc-touche" data-t="C" onclick="toucheCalc(this.dataset.t)">C</button>
+                    <button type="button" class="calc-touche" data-t="⌫" onclick="toucheCalc(this.dataset.t)">⌫</button>
+                    <button type="button" class="calc-touche calc-op" data-t="÷" onclick="toucheCalc(this.dataset.t)">÷</button>
+                    <button type="button" class="calc-touche calc-op" data-t="×" onclick="toucheCalc(this.dataset.t)">×</button>
+                    <button type="button" class="calc-touche" data-t="7" onclick="toucheCalc(this.dataset.t)">7</button>
+                    <button type="button" class="calc-touche" data-t="8" onclick="toucheCalc(this.dataset.t)">8</button>
+                    <button type="button" class="calc-touche" data-t="9" onclick="toucheCalc(this.dataset.t)">9</button>
+                    <button type="button" class="calc-touche calc-op" data-t="−" onclick="toucheCalc(this.dataset.t)">−</button>
+                    <button type="button" class="calc-touche" data-t="4" onclick="toucheCalc(this.dataset.t)">4</button>
+                    <button type="button" class="calc-touche" data-t="5" onclick="toucheCalc(this.dataset.t)">5</button>
+                    <button type="button" class="calc-touche" data-t="6" onclick="toucheCalc(this.dataset.t)">6</button>
+                    <button type="button" class="calc-touche calc-op" data-t="+" onclick="toucheCalc(this.dataset.t)">+</button>
+                    <button type="button" class="calc-touche" data-t="1" onclick="toucheCalc(this.dataset.t)">1</button>
+                    <button type="button" class="calc-touche" data-t="2" onclick="toucheCalc(this.dataset.t)">2</button>
+                    <button type="button" class="calc-touche" data-t="3" onclick="toucheCalc(this.dataset.t)">3</button>
+                    <button type="button" class="calc-touche calc-egal" data-t="=" onclick="toucheCalc(this.dataset.t)">=</button>
+                    <button type="button" class="calc-touche calc-zero" data-t="0" onclick="toucheCalc(this.dataset.t)">0</button>
+                    <button type="button" class="calc-touche" data-t="," onclick="toucheCalc(this.dataset.t)">,</button>
+                </div>
+                <button type="button" class="btn-submit" id="calc-utiliser" style="display: none;" onclick="utiliserResultatCalculatrice()"><i data-lucide="corner-down-left" class="icon-sm"></i><span></span></button>
+            </div>
+        </div>
+
         <div class="nav-tabs">
             <div class="nav-tabs-inner">
                 <button class="nav-btn active" onclick="switchView('menu')"><i data-lucide="home" class="icon-sm"></i>Accueil</button>
@@ -704,6 +781,7 @@
                             <i data-lucide="play" class="icon-sm"></i> Démarrer un traitement
                         </button>
                         <div id="accueil-pas-de-traitement" style="font-size: 12px; color: var(--text-light); text-align: center; margin-top: 8px;"></div>
+                        <button type="button" class="btn-secondary" id="accueil-refaire" style="display: none; margin-top: 8px;" onclick="refaireDernierTraitement()"></button>
                     </div>
 
                     <div class="form-card pleine-largeur" id="carte-meteo-accueil" style="display: none; padding: 12px 14px; --ordre-mobile: 3; --ordre-desktop: 2;">
@@ -735,7 +813,10 @@
                     <div class="form-card">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                             <h3>Étape 1 — Préparation de la bouillie</h3>
-                            <span class="step-badge">Étape 1/3</span>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <button type="button" class="btn-icon-delete" title="Calculatrice" style="color: var(--primary);" onclick="ouvrirCalculatrice()"><i data-lucide="calculator" class="icon-sm"></i></button>
+                                <span class="step-badge">Étape 1/3</span>
+                            </div>
                         </div>
 
                         <div class="form-group">
@@ -788,6 +869,15 @@
                         <div id="workflow-progress" class="info-box warning" style="display: none; margin-bottom: 12px;"></div>
 
                         <label class="form-label">Cocher les parcelles au fur et à mesure</label>
+                        <div id="workflow-parcelles-outils" style="display: none;">
+                            <input type="text" id="workflow-parcelles-recherche" class="form-input" placeholder="Rechercher une parcelle (nom, cépage)…" style="margin-bottom: 8px;" oninput="filtrerParcellesWorkflow(this.value)">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 6px;">
+                                <button type="button" class="btn-secondary" id="btn-cocher-visibles" onclick="cocherParcellesVisibles(true)"></button>
+                                <button type="button" class="btn-secondary" id="btn-decocher-visibles" onclick="cocherParcellesVisibles(false)"></button>
+                            </div>
+                            <button type="button" class="btn-tertiary" style="width: auto; padding: 4px 0;" onclick="trierParcellesParProximite()"><i data-lucide="locate-fixed" class="icon-sm"></i>Les plus proches d'abord</button>
+                            <div id="workflow-parcelles-info" style="font-size: 11px; color: var(--text-light); margin: 4px 0 8px;"></div>
+                        </div>
                         <div id="workflow-parcelles"></div>
 
                         <button type="button" class="btn-secondary" data-admin-seulement style="margin-top: 10px;" onclick="basculerFormulaireNouvelleParcelle()"><i data-lucide="plus" class="icon-sm"></i>Nouvelle parcelle</button>
@@ -951,6 +1041,16 @@
                 </div>
 
                 <div id="reglages-panneau-compte">
+                <div class="form-card">
+                    <h3 style="margin-bottom: 8px;"><i data-lucide="hand" class="icon"></i>Affichage terrain</h3>
+                    <label class="checkbox-item" style="margin-bottom: 0;">
+                        <input type="checkbox" id="option-mode-gants" onchange="basculerModeGants(this.checked)">
+                        <div>
+                            <strong style="font-size: 13px;">Mode gants</strong>
+                            <div style="font-size: 11.5px; color: var(--text-light);">Boutons, champs et cases à cocher agrandis, pour travailler avec des gants ou les doigts mouillés.</div>
+                        </div>
+                    </label>
+                </div>
                 <div class="form-card" id="carte-compte">
                     <h3 style="margin-bottom: 12px;"><i data-lucide="user" class="icon"></i>Mon compte</h3>
                     <div id="compte-email-info" style="font-size: 13px; margin-bottom: 12px;"></div>
@@ -1188,6 +1288,9 @@
         let filtresHisto = { texte: '', annee: '', parcelle: '', produit: '', personne: '' }; // recherche / filtres de l'historique
         let journalModifs = [];          // journal des modifications (admin seulement), le plus récent d'abord
         let journalDisponible = true;    // faux si la table du journal n'existe pas encore
+        let distancesParcelles = null;   // { nom de parcelle: distance en mètres } après « les plus proches d'abord »
+        let etatCalc = null;             // état de la calculatrice
+        let champCalculatrice = null;    // dernier champ numérique touché : cible du bouton « Utiliser »
 
         // Précharge le nom de chaque personne ayant créé un traitement déjà chargé (admin ET
         // collaborateurs). Ne redemande jamais un id déjà en cache.
@@ -1228,6 +1331,7 @@
         // remplacera uniquement son contenu par le stockage natif du téléphone.
         const CLE_BROUILLON = 'phytolog_brouillon_v1';
         const CLE_FILE_ATTENTE = 'phytolog_file_attente_v1';
+        const CLE_MODE_GANTS = 'phytolog_mode_gants';
         const Stockage = {
             lire(cle, parDefaut) {
                 try {
@@ -1273,6 +1377,7 @@
         }
 
         async function initialiserApp() {
+            appliquerModeGants();
             try {
                 currentUser = await getOrCreateUser();
 
@@ -1706,6 +1811,7 @@
             await chargerTraitements();
             await chargerCollaborateurs();
             await chargerSaisonsCloturees();
+            majIndicateurSynchro();
             precharcherLogoPDF(); // pas besoin d'attendre : prêt bien avant le premier clic sur "Télécharger le PDF"
 
             afficherMenu();
@@ -2631,6 +2737,7 @@
         }
 
         function afficherBrouillonAccueil() {
+            afficherRaccourciRefaire();
             const carte = document.getElementById('carte-brouillon');
             const messagePasDeTraitement = document.getElementById('accueil-pas-de-traitement');
             if (!carte) return;
@@ -2725,6 +2832,11 @@
                 }
                 Stockage.supprimer(CLE_BROUILLON);
             }
+            // Volume et surface repartent de ceux du dernier traitement (moins de saisie à refaire)
+            const defauts = valeursParDefautNouveauTraitement();
+            document.getElementById('workflow-volume').value = defauts.volume;
+            document.getElementById('workflow-surface').value = defauts.surface;
+            distancesParcelles = null;
             workflowEnCours = {
                 etape: 1,
                 libelle: '',
@@ -2974,41 +3086,7 @@
             document.getElementById('step3').style.display = 'none';
 
             afficherHorloge();
-
-            const cont = document.getElementById('workflow-parcelles');
-            cont.innerHTML = '';
-
-            parcelles.forEach(p => {
-                const label = document.createElement('label');
-                label.className = 'checkbox-item';
-
-                const chk = document.createElement('input');
-                chk.type = 'checkbox';
-                chk.dataset.surface = p.surface;
-                chk.dataset.parcelle = p.nom;
-                chk.onchange = majProgression;
-                chk.checked = workflowEnCours.parcelles.some(pr => pr.nom === p.nom);
-
-                const div = document.createElement('div');
-                div.style.flex = '1';
-                const nom = document.createElement('strong');
-                nom.style.fontSize = '13px';
-                nom.textContent = p.nom;
-                const detail = document.createElement('div');
-                detail.style.cssText = 'font-size: 11px; color: var(--text-light);';
-                detail.textContent = `${p.surface} ha${p.cepage ? ' · ' + p.cepage : ''}`;
-                const heure = document.createElement('div');
-                heure.className = 'heure-parcelle';
-                heure.style.cssText = 'font-size: 10px; color: var(--accent);';
-                div.appendChild(nom);
-                div.appendChild(detail);
-                div.appendChild(heure);
-
-                label.appendChild(chk);
-                label.appendChild(div);
-                cont.appendChild(label);
-            });
-
+            afficherListeParcellesWorkflow();
             majProgression();
         }
 
@@ -3026,7 +3104,8 @@
 
             const miseAJour = () => {
                 const diff = Math.round((new Date() - debut) / 60000);
-                timer.innerHTML = `<strong>⏱️ Durée: ${diff} min</strong>`;
+                timer.innerHTML = `<strong style="display: flex; align-items: center; gap: 6px;"><i data-lucide="timer" class="icon-sm"></i>Durée : ${formaterDuree(diff)}</strong>`;
+                if (typeof lucide !== 'undefined') lucide.createIcons();
             };
 
             miseAJour();
@@ -3277,7 +3356,8 @@
         // Un seul envoi à la fois : si un envoi est déjà en cours, on attend le même.
         function envoyerFileAttente() {
             if (!envoiFilePromesse) {
-                envoiFilePromesse = executerEnvoiFile().finally(() => { envoiFilePromesse = null; });
+                envoiFilePromesse = executerEnvoiFile().finally(() => { envoiFilePromesse = null; majIndicateurSynchro(); });
+                majIndicateurSynchro();
             }
             return envoiFilePromesse;
         }
@@ -3290,6 +3370,7 @@
         }
 
         function afficherFileAttente() {
+            majIndicateurSynchro();
             const bandeau = document.getElementById('bandeau-attente');
             if (bandeau) {
                 const n = lireFileAttenteExploitation().length;
@@ -3441,6 +3522,7 @@
         }
 
         function afficherMenu() {
+            afficherRaccourciRefaire();
             afficherEnTeteAccueil();
             afficherActiviteRecente();
             afficherIndicateursCampagne();
@@ -3833,6 +3915,343 @@
                 console.error('Erreur génération PDF bilan:', err);
                 alert('Erreur lors de la génération du PDF');
             }
+        }
+
+        // ===== INDICATEUR DE SYNCHRONISATION =====
+        // Résume en une phrase si le travail est bien parti sur le serveur. Fonction pure (testable).
+        function etatSynchronisation(e) {
+            const n = e.enAttente || 0;
+            const s = n > 1 ? 's' : '';
+            if (n === 0) {
+                return e.enLigne
+                    ? { niveau: 'ok', icone: 'check-circle', texte: 'Synchronisé : tout est enregistré' }
+                    : { niveau: 'hors', icone: 'wifi-off', texte: 'Hors ligne : rien à envoyer' };
+            }
+            if (e.envoiEnCours) return { niveau: 'envoi', icone: 'refresh-cw', texte: `Envoi en cours (${n})…` };
+            if (!e.enLigne) return { niveau: 'attente', icone: 'cloud-off', texte: `${n} compte${s} rendu${s} en attente : hors ligne, envoi dès le retour du réseau` };
+            if (e.erreur) return { niveau: 'erreur', icone: 'alert-triangle', texte: `${n} en attente : l'envoi a échoué, touche pour réessayer` };
+            return { niveau: 'attente', icone: 'cloud-off', texte: `${n} compte${s} rendu${s} en attente : touche pour envoyer` };
+        }
+
+        function etatSynchroActuel() {
+            return etatSynchronisation({
+                enLigne: typeof navigator === 'undefined' || navigator.onLine !== false,
+                enAttente: lireFileAttenteExploitation().length,
+                envoiEnCours: !!envoiFilePromesse,
+                erreur: !!(dernierEtatEnvoi && !dernierEtatEnvoi.reseau)
+            });
+        }
+
+        function majIndicateurSynchro() {
+            const bandeau = document.getElementById('sync-bandeau');
+            if (!bandeau) return;
+            const etat = etatSynchroActuel();
+            bandeau.className = 'sync-bandeau sync-' + etat.niveau;
+            bandeau.innerHTML = `<i data-lucide="${etat.icone}" class="icon-sm"></i><span>${echapperHtml(etat.texte)}</span>`;
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        function actionIndicateurSynchro() {
+            const etat = etatSynchroActuel();
+            if (etat.niveau === 'attente' || etat.niveau === 'erreur') {
+                if (navigator.onLine === false) alert('Pas de réseau pour le moment : tes comptes rendus sont bien gardés sur ce téléphone et partiront tout seuls dès que le réseau revient.');
+                else renvoyerMaintenant();
+            }
+        }
+
+        // ===== MODE GANTS =====
+        function appliquerModeGants() {
+            const actif = Stockage.lire(CLE_MODE_GANTS, false) === true;
+            document.body.classList.toggle('mode-gants', actif);
+            const caseOption = document.getElementById('option-mode-gants');
+            if (caseOption) caseOption.checked = actif;
+        }
+
+        function basculerModeGants(actif) {
+            Stockage.ecrire(CLE_MODE_GANTS, !!actif);
+            appliquerModeGants();
+        }
+
+        // ===== DÉMARRAGE PLUS RAPIDE =====
+        // Volume et surface proposés pour un nouveau traitement : ceux du dernier réalisé.
+        function valeursParDefautNouveauTraitement() {
+            const dernier = traitements[0];
+            return {
+                volume: dernier && dernier.volume_prepare > 0 ? dernier.volume_prepare : 1000,
+                surface: dernier && dernier.surface_traitee > 0 ? Math.round(dernier.surface_traitee * 100) / 100 : 8
+            };
+        }
+
+        function afficherRaccourciRefaire() {
+            const bouton = document.getElementById('accueil-refaire');
+            if (!bouton) return;
+            const dernier = traitements[0];
+            if (!dernier || lireBrouillon()) {
+                bouton.style.display = 'none';
+                bouton.innerHTML = '';
+                return;
+            }
+            const date = new Date(String(dernier.date) + 'T12:00:00');
+            const titre = dernier.libelle || (isNaN(date.getTime()) ? '' : date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }));
+            bouton.style.display = 'inline-flex';
+            bouton.innerHTML = `<i data-lucide="copy" class="icon-sm"></i><span>Refaire le dernier traitement <span style="font-weight: 400; opacity: 0.75;">(${echapperHtml(titre)})</span></span>`;
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        function refaireDernierTraitement() {
+            if (traitements[0]) dupliquerTraitement(traitements[0].id);
+        }
+
+        // ===== PARCELLES SUR LE TERRAIN =====
+        function distanceMetres(lat1, lng1, lat2, lng2) {
+            const rad = (d) => d * Math.PI / 180;
+            const a = Math.sin(rad(lat2 - lat1) / 2) ** 2
+                    + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(rad(lng2 - lng1) / 2) ** 2;
+            return 2 * 6371000 * Math.asin(Math.sqrt(a));
+        }
+
+        function libelleDistance(metres) {
+            const arrondi = Math.max(10, Math.round(metres / 10) * 10);
+            if (arrondi < 1000) return `à ${arrondi} m`;
+            return `à ${(metres / 1000).toFixed(1).replace('.', ',')} km`;
+        }
+
+        // Lien qui ouvre l'application de cartes du téléphone sur la parcelle
+        // (Plans sur iPhone/iPad/Mac, Google Maps ailleurs).
+        function lienCarte(latitude, longitude, nom, plateforme) {
+            const ua = plateforme !== undefined ? plateforme : ((typeof navigator !== 'undefined' && navigator.userAgent) || '');
+            const coordonnees = `${latitude},${longitude}`;
+            if (/iPhone|iPad|iPod|Macintosh/i.test(ua)) return `https://maps.apple.com/?ll=${coordonnees}&q=${encodeURIComponent(nom || 'Parcelle')}`;
+            return `https://www.google.com/maps/search/?api=1&query=${coordonnees}`;
+        }
+
+        function parcellesOrdonnees() {
+            if (!distancesParcelles) return parcelles;
+            return [...parcelles].sort((a, b) => {
+                const da = distancesParcelles[a.nom], db = distancesParcelles[b.nom];
+                if (da === undefined && db === undefined) return 0;
+                if (da === undefined) return 1;
+                if (db === undefined) return -1;
+                return da - db;
+            });
+        }
+
+        function motsRecherchePourParcelles() {
+            const champ = document.getElementById('workflow-parcelles-recherche');
+            return normaliserRecherche((champ ? champ.value : '').trim()).split(/\s+/).filter(Boolean);
+        }
+
+        // Cases des parcelles qui correspondent à la recherche (toutes si la recherche est vide)
+        function casesParcellesCorrespondantes() {
+            const mots = motsRecherchePourParcelles();
+            return Array.from(document.querySelectorAll('#workflow-parcelles .checkbox-item')).filter(label =>
+                mots.every(m => (label.dataset.recherche || '').includes(m))
+            ).map(label => label.querySelector('input[type="checkbox"]'));
+        }
+
+        function majBoutonsParcelles() {
+            const bCocher = document.getElementById('btn-cocher-visibles');
+            const bDecocher = document.getElementById('btn-decocher-visibles');
+            if (!bCocher || !bDecocher) return;
+            const recherche = motsRecherchePourParcelles().length > 0;
+            const n = casesParcellesCorrespondantes().length;
+            bCocher.innerHTML = `<i data-lucide="check-check" class="icon-sm"></i>${recherche ? `Cocher les ${n} trouvée${n > 1 ? 's' : ''}` : 'Tout cocher'}`;
+            bDecocher.innerHTML = `<i data-lucide="x" class="icon-sm"></i>${recherche ? `Décocher les ${n}` : 'Tout décocher'}`;
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        function filtrerParcellesWorkflow(texte) {
+            const mots = normaliserRecherche((texte || '').trim()).split(/\s+/).filter(Boolean);
+            Array.from(document.querySelectorAll('#workflow-parcelles .checkbox-item')).forEach(label => {
+                const chk = label.querySelector('input[type="checkbox"]');
+                const correspond = mots.every(m => (label.dataset.recherche || '').includes(m));
+                label.style.display = (correspond || (chk && chk.checked)) ? 'flex' : 'none';   // une parcelle déjà cochée reste visible
+            });
+            majBoutonsParcelles();
+        }
+
+        // Attention : chaque parcelle cochée reçoit l'heure ACTUELLE comme heure de passage.
+        function cocherParcellesVisibles(etat) {
+            if (!workflowEnCours) return;
+            const cibles = casesParcellesCorrespondantes();
+            if (!etat) {
+                const aRetirer = cibles.filter(c => c.checked).length;
+                if (aRetirer >= 2 && !confirm(`Décocher ${aRetirer} parcelles ? Leurs heures de passage seront perdues.`)) return;
+            }
+            cibles.forEach(c => { c.checked = etat; });
+            majProgression();
+        }
+
+        async function trierParcellesParProximite() {
+            const info = document.getElementById('workflow-parcelles-info');
+            const avecGps = parcelles.filter(p => p.latitude && p.longitude);
+            if (avecGps.length === 0) {
+                alert('Aucune parcelle n\'a de position GPS enregistrée. Ajoute-la dans Plus → Parcelles (bouton « Me localiser ici », sur place).');
+                return;
+            }
+            if (info) info.textContent = 'Localisation en cours…';
+            try {
+                const position = await demanderPositionGPS();
+                distancesParcelles = {};
+                avecGps.forEach(p => { distancesParcelles[p.nom] = distanceMetres(position.latitude, position.longitude, p.latitude, p.longitude); });
+                afficherListeParcellesWorkflow();
+                if (info) info.textContent = 'Triées de la plus proche à la plus éloignée.';
+            } catch (err) {
+                if (info) info.textContent = messageErreur(err);
+            }
+        }
+
+        function afficherListeParcellesWorkflow() {
+            const cont = document.getElementById('workflow-parcelles');
+            const outils = document.getElementById('workflow-parcelles-outils');
+            const info = document.getElementById('workflow-parcelles-info');
+            cont.innerHTML = '';
+            if (outils) outils.style.display = parcelles.length >= 3 ? 'block' : 'none';
+            if (info) info.textContent = 'Les parcelles cochées d\'un coup reçoivent toutes l\'heure actuelle comme heure de passage.';
+
+            parcellesOrdonnees().forEach(p => {
+                const label = document.createElement('label');
+                label.className = 'checkbox-item';
+                label.dataset.recherche = normaliserRecherche(p.nom + ' ' + (p.cepage || ''));
+
+                const chk = document.createElement('input');
+                chk.type = 'checkbox';
+                chk.dataset.surface = p.surface;
+                chk.dataset.parcelle = p.nom;
+                chk.onchange = majProgression;
+                chk.checked = workflowEnCours.parcelles.some(pr => pr.nom === p.nom);
+
+                const div = document.createElement('div');
+                div.style.flex = '1';
+                const nom = document.createElement('strong');
+                nom.style.fontSize = '13px';
+                nom.textContent = p.nom;
+                const detail = document.createElement('div');
+                detail.style.cssText = 'font-size: 11px; color: var(--text-light);';
+                const distance = distancesParcelles && distancesParcelles[p.nom] !== undefined ? ' · ' + libelleDistance(distancesParcelles[p.nom]) : '';
+                detail.textContent = `${p.surface} ha${p.cepage ? ' · ' + p.cepage : ''}${distance}`;
+                const heure = document.createElement('div');
+                heure.className = 'heure-parcelle';
+                heure.style.cssText = 'font-size: 10px; color: var(--accent);';
+                div.appendChild(nom);
+                div.appendChild(detail);
+                div.appendChild(heure);
+
+                label.appendChild(chk);
+                label.appendChild(div);
+
+                if (p.latitude && p.longitude) {
+                    const lien = document.createElement('a');
+                    lien.href = lienCarte(p.latitude, p.longitude, p.nom);
+                    lien.target = '_blank';
+                    lien.rel = 'noopener';
+                    lien.title = 'Ouvrir dans Plans pour la retrouver';
+                    lien.className = 'btn-icon-delete';
+                    lien.style.cssText = 'color: var(--primary); text-decoration: none;';
+                    lien.innerHTML = '<i data-lucide="map-pin" class="icon-sm"></i>';
+                    lien.onclick = (e) => e.stopPropagation();   // ouvrir la carte ne doit pas cocher la parcelle
+                    label.appendChild(lien);
+                }
+                cont.appendChild(label);
+            });
+
+            const champ = document.getElementById('workflow-parcelles-recherche');
+            if (champ && champ.value) filtrerParcellesWorkflow(champ.value); else majBoutonsParcelles();
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        // ===== CALCULATRICE (quatre opérations, résultat réutilisable dans un champ) =====
+        function calcNouvelEtat() { return { ecran: '0', memoire: null, op: null, frais: true }; }
+        function calcValeur(ecran) { return parseFloat(String(ecran).replace(',', '.')); }
+        function calcFormater(n) {
+            if (!isFinite(n) || Math.abs(n) >= 1e12) return 'Erreur';   // trop grand pour l'écran
+            return String(Math.round(n * 1e9) / 1e9).replace('.', ',');
+        }
+        function calcAppliquer(a, op, b) {
+            if (op === '+') return a + b;
+            if (op === '−') return a - b;
+            if (op === '×') return a * b;
+            if (op === '÷') return b === 0 ? NaN : a / b;
+            return b;
+        }
+
+        // Une touche appuyée : renvoie le nouvel état (l'ancien n'est pas modifié).
+        function calcToucher(etat, t) {
+            let e = { ...etat };
+            if (e.ecran === 'Erreur') e = calcNouvelEtat();
+            if (/^[0-9]$/.test(t)) {
+                if (e.frais) { e.ecran = t; e.frais = false; }
+                else if (e.ecran.replace(/[-,]/g, '').length < 12) e.ecran = e.ecran === '0' ? t : e.ecran + t;
+                return e;
+            }
+            if (t === ',') {
+                if (e.frais) { e.ecran = '0,'; e.frais = false; }
+                else if (!e.ecran.includes(',')) e.ecran += ',';
+                return e;
+            }
+            if (t === 'C') return calcNouvelEtat();
+            if (t === '⌫') {
+                if (e.frais) return e;
+                const reste = e.ecran.slice(0, -1);
+                e.ecran = (reste === '' || reste === '-') ? '0' : reste;
+                return e;
+            }
+            if ('+−×÷'.includes(t)) {
+                if (e.op !== null && !e.frais) {
+                    e.ecran = calcFormater(calcAppliquer(calcValeur(e.memoire), e.op, calcValeur(e.ecran)));
+                    if (e.ecran === 'Erreur') return { ...calcNouvelEtat(), ecran: 'Erreur' };
+                }
+                e.memoire = e.ecran; e.op = t; e.frais = true;
+                return e;
+            }
+            if (t === '=') {
+                if (e.op === null) return e;
+                e.ecran = calcFormater(calcAppliquer(calcValeur(e.memoire), e.op, calcValeur(e.ecran)));
+                e.memoire = null; e.op = null; e.frais = true;
+                return e;
+            }
+            return e;
+        }
+
+        function libelleChamp(champ) {
+            const groupe = champ.closest ? (champ.closest('.form-group') || champ.parentElement) : null;
+            const etiquette = groupe ? groupe.querySelector('label') : null;
+            return etiquette ? etiquette.textContent.trim() : 'ce champ';
+        }
+
+        function afficherCalculatrice() {
+            document.getElementById('calc-ecran').textContent = etatCalc.ecran;
+            document.getElementById('calc-trace').textContent = etatCalc.op ? `${etatCalc.memoire} ${etatCalc.op}` : '';
+            const bouton = document.getElementById('calc-utiliser');
+            const cible = champCalculatrice && document.body.contains(champCalculatrice) ? champCalculatrice : null;
+            bouton.style.display = cible ? 'inline-flex' : 'none';
+            if (cible) bouton.querySelector('span').textContent = `Utiliser dans « ${libelleChamp(cible)} »`;
+        }
+
+        function ouvrirCalculatrice() {
+            etatCalc = calcNouvelEtat();
+            document.getElementById('calculatrice-fond').style.display = 'flex';
+            afficherCalculatrice();
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        function fermerCalculatrice() {
+            document.getElementById('calculatrice-fond').style.display = 'none';
+        }
+
+        function toucheCalc(t) {
+            etatCalc = calcToucher(etatCalc, t);
+            afficherCalculatrice();
+        }
+
+        function utiliserResultatCalculatrice() {
+            if (!champCalculatrice || !document.body.contains(champCalculatrice)) return;
+            etatCalc = calcToucher(etatCalc, '=');
+            const valeur = calcValeur(etatCalc.ecran);
+            if (!isFinite(valeur)) { afficherCalculatrice(); return; }
+            champCalculatrice.value = String(valeur);
+            ['input', 'change'].forEach(nom => champCalculatrice.dispatchEvent(new Event(nom, { bubbles: true })));
+            fermerCalculatrice();
         }
 
         // ===== RECHERCHE ET FILTRES DE L'HISTORIQUE =====
@@ -4636,7 +5055,13 @@
 
         // ===== INIT =====
         window.addEventListener('load', initialiserApp);
-        window.addEventListener('online', () => { envoyerFileAttente(); });
+        window.addEventListener('online', () => { majIndicateurSynchro(); envoyerFileAttente(); });
+        window.addEventListener('offline', () => { majIndicateurSynchro(); });
+        // Mémorise le dernier champ numérique touché : c'est là que la calculatrice peut écrire son résultat
+        document.addEventListener('focusin', (e) => {
+            const el = e.target;
+            if (el && el.tagName === 'INPUT' && el.type === 'number') champCalculatrice = el;
+        });
         window.addEventListener('pagehide', sauvegarderBrouillon);
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'hidden') sauvegarderBrouillon();
