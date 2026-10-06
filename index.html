@@ -1494,7 +1494,11 @@
                 data.hourly.time.forEach((t, i) => {
                     const debutHeure = new Date(t); // "2026-09-28T06:00" = heure locale de l'exploitation
                     const finHeure = new Date(debutHeure.getTime() + 3600000);
-                    if (debutHeure <= fin && finHeure > debut) {
+                    // Chevauchement strict : un traitement qui finit pile à 07:00 ne couvre pas l'heure 07:00.
+                    // (Cas d'une durée nulle : on garde l'heure qui contient l'instant.)
+                    const chevauche = (debutHeure < fin && finHeure > debut)
+                        || (fin.getTime() === debut.getTime() && debutHeure <= fin && finHeure > debut);
+                    if (chevauche) {
                         heuresRetenues.push({
                             heure: t.split('T')[1],
                             temperature: data.hourly.temperature_2m[i],
@@ -2498,6 +2502,13 @@
             return `${h}h et ${reste}min`;
         }
 
+        // Année d'une date "AAAA-MM-JJ", lue directement dans le texte : même résultat que la base de
+        // données, quel que soit le fuseau horaire de l'appareil (new Date(...).getFullYear() peut
+        // donner l'année précédente sur un appareil réglé à l'ouest de Greenwich).
+        function anneeDe(dateTexte) {
+            return parseInt(String(dateTexte).slice(0, 4), 10);
+        }
+
         // Affiche un nombre sans zéros inutiles : 0.05 reste 0.05, 1.50 devient 1.5
         function formaterNombre(n, decimales) {
             const f = Math.pow(10, decimales === undefined ? 2 : decimales);
@@ -3091,10 +3102,10 @@
                 // Date du traitement en heure LOCALE (toISOString donnerait la date UTC, décalée de 1-2 h en France)
                 const d = w.debutTime;
                 w.dateISO = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-                w.totalSurf = w.parcelles.reduce((s, p) => {
+                w.totalSurf = Math.round(w.parcelles.reduce((s, p) => {
                     const parc = parcelles.find(x => x.nom === p.nom);
                     return s + (parc ? parc.surface : 0);
-                }, 0);
+                }, 0) * 10000) / 10000;
                 w.meteo = null;
             }
             sauvegarderBrouillon();
@@ -3293,8 +3304,8 @@
         async function validerRapport() {
             if (!workflowEnCours || !currentExploitation || !currentUser) return;
             const w = workflowEnCours;
-            if (w.dateISO && saisonsCloturees.has(new Date(w.dateISO).getFullYear())) {
-                alert(`La saison ${new Date(w.dateISO).getFullYear()} est clôturée : impossible d'y enregistrer un nouveau traitement. Rouvre-la d'abord si besoin (onglet Historique → Bilan annuel).`);
+            if (w.dateISO && saisonsCloturees.has(anneeDe(w.dateISO))) {
+                alert(`La saison ${anneeDe(w.dateISO)} est clôturée : impossible d'y enregistrer un nouveau traitement. Rouvre-la d'abord si besoin (onglet Historique → Bilan annuel).`);
                 return;
             }
             const bouton = document.getElementById('btn-valider');
@@ -3517,7 +3528,7 @@
         function peuplerSelectAnnees() {
             const select = document.getElementById('bilan-annee');
             const valeurActuelle = select.value;
-            const annees = [...new Set(traitements.map(t => new Date(t.date).getFullYear()))].sort((a, b) => b - a);
+            const annees = [...new Set(traitements.map(t => anneeDe(t.date)))].sort((a, b) => b - a);
             if (annees.length === 0) {
                 select.innerHTML = '<option value="">—</option>';
                 return;
@@ -3531,7 +3542,7 @@
         // par CHAQUE parcelle, produit par produit — utile pour vérifier un plafond annuel
         // réglementaire comme le cuivre).
         function calculerBilanAnnuel(annee) {
-            const traitementsAnnee = traitements.filter(t => new Date(t.date).getFullYear() === annee);
+            const traitementsAnnee = traitements.filter(t => anneeDe(t.date) === annee);
             const parParcelle = {};
             const parProduit = {};
 
@@ -3543,7 +3554,7 @@
                     const uniteQuantite = unite === 'kg/ha' ? 'kg' : 'L';
 
                     if (!parProduit[nomProduit]) parProduit[nomProduit] = { totalQuantite: 0, unite: uniteQuantite, nbTraitements: 0 };
-                    parProduit[nomProduit].totalQuantite += valeur * t.surface_traitee;
+                    parProduit[nomProduit].totalQuantite += (Number(valeur) || 0) * (Number(t.surface_traitee) || 0);
                     parProduit[nomProduit].nbTraitements++;
 
                     nomsParcelles.forEach(nomParcelle => {
@@ -3835,7 +3846,7 @@
             }
 
             html += traitements.map((t, i) => {
-                const anneeTraitement = new Date(t.date).getFullYear();
+                const anneeTraitement = anneeDe(t.date);
                 const peutModifier = (monRole === 'admin' || t.created_by === currentUser.id) && !saisonsCloturees.has(anneeTraitement);
                 return `
                 <div class="item-card">
@@ -3869,7 +3880,7 @@
 
         async function supprimerTraitement(id) {
             const t = traitements.find(x => x.id === id);
-            if (t && saisonsCloturees.has(new Date(t.date).getFullYear())) {
+            if (t && saisonsCloturees.has(anneeDe(t.date))) {
                 alert('Ce traitement appartient à une saison clôturée. Rouvre la saison (onglet Bilan annuel) avant de pouvoir le supprimer.');
                 return;
             }
@@ -3890,6 +3901,10 @@
             editEnCours = {
                 id: t.id,
                 parcelles: new Set((t.parcelles || []).map(p => p.nom)),
+                // L'état d'origine est conservé : heure de passage de chaque parcelle et surface
+                // enregistrée ne doivent changer que si on change réellement la sélection.
+                parcellesOrigine: (t.parcelles || []).map(p => ({ ...p })),
+                surfaceOrigine: t.surface_traitee,
                 doses: {}
             };
             Object.entries(t.produits || {}).forEach(([nom, entree]) => {
@@ -4021,18 +4036,35 @@
             if (!date || !heureDebut || !heureFin) { alert('Date et heures obligatoires'); return; }
             if (editEnCours.parcelles.size === 0) { alert('Sélectionne au moins une parcelle'); return; }
             if (Object.keys(editEnCours.doses).length === 0) { alert('Sélectionne au moins un produit'); return; }
-            if (saisonsCloturees.has(new Date(date).getFullYear())) {
-                alert(`La saison ${new Date(date).getFullYear()} est clôturée : rouvre-la (onglet Bilan annuel) avant de pouvoir y dater un traitement.`);
+            if (saisonsCloturees.has(anneeDe(date))) {
+                alert(`La saison ${anneeDe(date)} est clôturée : rouvre-la (onglet Bilan annuel) avant de pouvoir y dater un traitement.`);
                 return;
             }
 
             let duree = (parseInt(heureFin.split(':')[0]) * 60 + parseInt(heureFin.split(':')[1]))
                       - (parseInt(heureDebut.split(':')[0]) * 60 + parseInt(heureDebut.split(':')[1]));
-            if (duree <= 0) duree += 24 * 60;
+            if (duree < 0) duree += 24 * 60; // fin après minuit ; une durée de 0 reste 0
 
-            const parcellesChoisies = parcelles.filter(p => editEnCours.parcelles.has(p.nom));
-            const surfaceTotale = parcellesChoisies.reduce((s, p) => s + p.surface, 0);
-            const parcellesJSON = parcellesChoisies.map(p => ({ nom: p.nom, time: heureDebut }));
+            // Parcelles : on garde l'heure de passage déjà enregistrée ; seules les parcelles AJOUTÉES
+            // reçoivent l'heure de début. Une parcelle devenue introuvable (renommée, supprimée) reste
+            // dans le traitement : on ne perd jamais une ligne du registre.
+            const origine = editEnCours.parcellesOrigine || [];
+            const heureOrigine = {};
+            origine.forEach(p => { heureOrigine[p.nom] = p.time; });
+            const parcellesJSON = [...editEnCours.parcelles].map(nom => ({ nom, time: heureOrigine[nom] || heureDebut }));
+
+            // Surface : celle enregistrée, ajustée uniquement des parcelles ajoutées / retirées.
+            const surfaceDe = (nom) => { const pc = parcelles.find(x => x.nom === nom); return pc ? pc.surface : 0; };
+            const nomsOrigine = new Set(origine.map(p => p.nom));
+            let surfaceTotale;
+            if (isFinite(Number(editEnCours.surfaceOrigine)) && editEnCours.surfaceOrigine !== null) {
+                surfaceTotale = Number(editEnCours.surfaceOrigine);
+                nomsOrigine.forEach(nom => { if (!editEnCours.parcelles.has(nom)) surfaceTotale -= surfaceDe(nom); });
+                editEnCours.parcelles.forEach(nom => { if (!nomsOrigine.has(nom)) surfaceTotale += surfaceDe(nom); });
+            } else {
+                surfaceTotale = [...editEnCours.parcelles].reduce((s, nom) => s + surfaceDe(nom), 0);
+            }
+            surfaceTotale = Math.round(Math.max(0, surfaceTotale) * 10000) / 10000;
 
             try {
                 const { error } = await supabaseClient
@@ -4275,7 +4307,8 @@
                 sousTitre('Bulletin météo pendant la pulvérisation');
                 if (t.meteo) {
                     const m = t.meteo;
-                    const direction = m.vent_direction ? `  (${m.vent_direction})` : '';
+                    // Le vent qui tourne est stocké « S → SE » ; la flèche n'existe pas dans la police du PDF
+                    const direction = m.vent_direction ? `  (${String(m.vent_direction).replace(/\s*\u2192\s*/g, ' puis ')})` : '';
                     paragraphe(`Vent moyen : ${m.vent_moyen} km/h${direction}  \u2014  rafales max : ${m.rafale_max} km/h`, 10);
                     const temperature = (m.temperature_min !== undefined)
                         ? `${m.temperature_min}\u00b0C \u00e0 ${m.temperature_max}\u00b0C`
